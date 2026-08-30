@@ -25,17 +25,17 @@ BOARD_VERSION="${1:-}"
 work="$(pwd)"
 img_dir="$work/base-img"
 out_dir="$work/out"
-fused_dtb="$work/rk3568-lyt-t68m.dtb"
+fused_dtb="$work/dist/rk3568-lyt-t68m.dtb"
 mount_pt="$work/boot-mnt"
 
 echo "=================================================================="
 echo " xck-nas FnNAS subboard builder  (rockchip)"
 echo "=================================================================="
 
-# 0. 前置校验：必须有融合 dtb（编译产物）
+# 0. 前置校验：必须有融合 dtb（仓库 dist/ 下已放预编译产物）
 if [[ ! -f "$fused_dtb" ]]; then
     echo "ERROR: 找不到融合 dtb: $fused_dtb"
-    echo "       请先运行 ./build-dtb.sh 生成 rk3568-lyt-t68m.dtb"
+    echo "       请先运行 ./build-dtb.sh 生成 dist/rk3568-lyt-t68m.dtb 并提交仓库"
     exit 1
 fi
 echo ">>> 使用融合 dtb: $(sha256sum "$fused_dtb" | cut -c1-16) ..."

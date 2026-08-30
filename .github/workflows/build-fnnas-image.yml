@@ -22,22 +22,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu \
-            util-linux xz-utils curl jq gawk coreutils \
-            device-tree-compiler bison flex libssl-dev bc \
-            python3 python3-pip
-          sudo pip3 install pyelftools
+            util-linux xz-utils curl jq gawk coreutils
           uname -r
-
-      - name: 编译融合 dtb
-        run: |
-          chmod +x build-dtb.sh
-          ./build-dtb.sh
 
       - name: 打包完整固件（官方基础镜像 + 注入融合dtb）
         run: |
-          # 释放 dtb 编译产生的内核源码空间
-          rm -rf kernel
           df -h . | tail -1
           chmod +x scripts/build-fnnas.sh
           ./scripts/build-fnnas.sh "${{ inputs.base_version }}"
