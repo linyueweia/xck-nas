@@ -3,12 +3,8 @@ name: Build full FnNAS image (xck-nas)
 on:
   workflow_dispatch:
     inputs:
-      board:
-        description: 目标设备 (SOCs on amlogic/rockchip/allwinner)
-        required: false
-        default: lyt-t68m
-      kernel:
-        description: 内核版本 (留空自动选最新, 例 6.12.105)
+      base_version:
+        description: 官方 rockchip 基础镜像版本 (留空取最新, 例 1253 / 692)
         required: false
         default: ""
 
@@ -22,13 +18,12 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装依赖（dtb 编译 + renas 打包）
+      - name: 安装依赖
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu \
-            btrfs-progs dosfstools parted gdisk util-linux uuid-runtime \
-            build-essential fakeroot pigz xz-utils zstd curl jq gawk git \
+            util-linux xz-utils curl jq gawk coreutils \
             device-tree-compiler bison flex libssl-dev bc \
             python3 python3-pip
           sudo pip3 install pyelftools
@@ -39,10 +34,13 @@ jobs:
           chmod +x build-dtb.sh
           ./build-dtb.sh
 
-      - name: 运行完整打包 (renas + 注入融合dtb)
+      - name: 打包完整固件（官方基础镜像 + 注入融合dtb）
         run: |
+          # 释放 dtb 编译产生的内核源码空间
+          rm -rf kernel
+          df -h . | tail -1
           chmod +x scripts/build-fnnas.sh
-          ./scripts/build-fnnas.sh "${{ inputs.board }}" "${{ inputs.kernel }}"
+          ./scripts/build-fnnas.sh "${{ inputs.base_version }}"
 
       - name: 校验并上传产物
         run: |
@@ -69,9 +67,9 @@ jobs:
           body: |
             LYT T68M (RK3568) 飞牛 fnOS 完整固件（自打包）
 
-            基于 fnnas.com 官方 Arm64 基础镜像构建，融合子板支持：
+            基于 fnnas.com 官方 rockchip Arm64 基础镜像构建，注入融合子板 dtb：
             - SATA2 (sata@fc800000)
             - SDIO WiFi (AIC8800, sdmmc2 + sdio-pwrseq)
-            - 按 need_to_disable_pcie2x1 策略禁用 pcie2x1 释放 combphy2
+            - 按 iStoreOS v2 策略禁用 pcie2x1 释放 combphy2
 
             串口 console=ttyS2,1500000。fdtfile=rockchip/rk3568-lyt-t68m.dtb。
