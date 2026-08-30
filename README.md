@@ -13,9 +13,29 @@
 ## 目录结构
 
 ```
-dts/rk3568-lyt-t68m.dts   # 融合后的设备树源码
-build-dtb.sh              # 编译脚本（workflow 与本地通用）
-.github/workflows/build-dtb.yml  # GitHub Actions 云编译
+dts/rk3568-lyt-t68m.dts              # 融合后的设备树源码
+build-dtb.sh                         # 编译脚本（workflow 与本地通用）
+scripts/build-fnnas.sh               # 自打包完整固件脚本（renas + 注入融合dtb）
+.github/workflows/build-dtb.yml      # GitHub Actions 云编译 dtb
+.github/workflows/build-fnnas-image.yml  # GitHub Actions 云打包完整固件
+```
+
+## 自打包完整固件（可选，不依赖 ophub 成品）
+
+除了导出单个 dtb，本仓库还能**从 fnnas.com 官方基础镜像自动打包完整固件**，
+并把本仓库融合子板补丁（SATA2 + SDIO WiFi）的 dtb 注入 boot 分区。
+
+- 在 **Actions → Build full FnNAS image → Run workflow** 手动触发
+- 输入 `board` = `lyt-t68m`（默认）
+- 产物：`fnnas_rockchip_lyt-t68m_k*.img.gz` 完整可烧录镜像（约 1.8G）
+
+烧录方法（到 T68M eMMC/TF）：
+```bash
+# 先解压
+gzip -dk fnnas_rockchip_lyt-t68m_k*.img.gz
+# 写盘（把 sdX 换成目标盘，务必先确认盘符）
+sudo dd if=fnnas_rockchip_lyt-t68m_k*.img of=/dev/sdX bs=4M status=progress conv=fsync
+# 或在 Windows 下用 balenaEtcher / Rufus / Win32DiskImager 烧录
 ```
 
 ## 手动触发云编译
