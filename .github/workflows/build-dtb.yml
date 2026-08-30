@@ -1,0 +1,68 @@
+name: Build fnOS device tree (xck-nas)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'dts/**'
+      - 'build-dtb.sh'
+      - '.github/workflows/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build-dtb:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu \
+            device-tree-compiler \
+            bison flex libssl-dev bc \
+            python3 python3-pip
+          sudo pip3 install pyelftools
+
+      - name: 编译设备树
+        run: |
+          chmod +x build-dtb.sh
+          ./build-dtb.sh
+
+      - name: 校验产物
+        run: |
+          ls -la rk3568-lyt-t68m.dtb
+          file rk3568-lyt-t68m.dtb
+          sha256sum rk3568-lyt-t68m.dtb > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: 上传 dtb 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-lyt-t68m.dtb
+          path: |
+            rk3568-lyt-t68m.dtb
+            sha256sums.txt
+
+      - name: 发布 Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rk3568-lyt-t68m.dtb
+            sha256sums.txt
+          body: |
+            LYT T68M (RK3568) 飞牛 fnOS 设备树，基于飞牛主线内核(unifreq/linux-6.12.y)。
+
+            融合子板支持：
+            - SATA2 (sata@fc800000)
+            - SDIO WiFi (AIC8800, sdmmc2 + sdio-pwrseq)
+            - 按 iStoreOS v2 策略禁用 pcie2x1 以释放 combphy2 给 SATA2
+
+            eth0/eth1 千兆、eth2/eth3 RTL8125 2.5G、USB 不受影响。
+            串口 console=ttyS2,1500000。
+            用法：覆盖到飞牛 /boot/dtb/rockchip/rk3568-lyt-t68m.dtb 后重启。
