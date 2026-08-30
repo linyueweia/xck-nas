@@ -52,24 +52,26 @@ fi
 mkdir -p "$img_dir"
 if ! compgen -G "$img_dir/fnnas-official-arm64-image_*.img.xz" >/dev/null; then
     echo ">>> 下载官方基础镜像 (fnnas_base_image)"
-    curl -fsSL \
-        "https://api.github.com/repos/ophub/fnnas/releases/expanded_assets/$FNNAS_BASE_TAG" \
-        -o /tmp/base_assets.json
-    # 取最新的 Amlogic/rockchip 通用官方镜像 (按名字倒序选最新)
+    # 通过 releases/tags 接口获取，明确选择 rockchip 平台
+    curl -fsSL -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/ophub/fnnas/releases/tags/$FNNAS_BASE_TAG" \
+        -o /tmp/base_assets.json || {
+            echo "ERROR: 无法获取 $FNNAS_BASE_TAG release 信息"
+            exit 1
+        }
+    # 取最新的 rockchip 官方镜像（按名字中版本号倒序）
     img_url="$(
-        jq -r '.assets[] | select(.name | endswith(".img.xz") and (contains("official"))) | [.updated_at, .browser_download_url] | @tsv' \
-            /tmp/base_assets.json | sort -r | head -1 | cut -f2
+        jq -r '.assets[] | select(.name | test("rockchip_[0-9]+\\.img\\.xz$")) |
+              [(.name|match("rockchip_([0-9]+)")|.captures[0].string | tonumber), .browser_download_url] | @tsv' \
+            /tmp/base_assets.json | sort -k1,1 -rn | head -1 | cut -f2
     )"
     if [[ -z "$img_url" ]]; then
-        echo "ERROR: 未在 $FNNAS_BASE_TAG 找到官方基础镜像"
-        cat /tmp/base_assets.json | jq -r '.assets[]?.name // empty' | head
+        echo "ERROR: 未在 $FNNAS_BASE_TAG 找到 rockchip 基础镜像"
+        jq -r '.assets[]?.name // empty' /tmp/base_assets.json | head
         exit 1
     fi
     echo ">>> 基础镜像: $img_url"
-    curl -fL "$img_url" -o "$img_dir/fnnas-official-arm64-image.img.xz"
-    # 还原为 sig-* 文件名格式，方便 renas 识别
-    mv "$img_dir/fnnas-official-arm64-image.img.xz" \
-       "$img_dir/$(basename "$img_url")"
+    curl -fL "$img_url" -o "$img_dir/$(basename "$img_url")"
 else
     echo ">>> 官方基础镜像已存在"
 fi
