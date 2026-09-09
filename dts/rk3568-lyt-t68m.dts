@@ -1026,6 +1026,9 @@
 					regulator-min-microvolt = <0x7a120>;
 					regulator-max-microvolt = <0x149970>;
 					regulator-ramp-delay = <0x1771>;
+					regulator-init-microvolt = <0xdbba0>;
+					regulator-always-on;
+					regulator-boot-on;
 					phandle = <0xf8>;
 
 					regulator-state-mem {
