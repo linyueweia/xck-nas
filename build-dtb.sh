@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 #
-# xck-nas 云编译脚本
-# 基于飞牛主线内核 unifreq/linux-6.12.y，编译融合子板补丁(SATA2 + SDIO WiFi)的
-# LYT T68M (RK3568) 设备树 rk3568-lyt-t68m.dtb，用于飞牛 fnOS。
+# xck-nas 云编译脚本（仅编译 DTB，不打包固件）
+#
+# 基于飞牛主线内核 unifreq/linux-6.12.y，编译融合子板补丁
+# （SATA2 + SDIO WiFi）且含 NPU/多媒体节点（npu@fde40000 / rkvdec /
+# rkvenc / jpegd / iep / mpp-srv 等完整集群）的 LYT T68M (RK3568)
+# 设备树 rk3568-lyt-t68m.dtb。
+#
+# 说明：dts/rk3568-lyt-t68m.dts 为展开式自包含 DTS（含全部节点与
+# phandle 定义，不依赖内核 dtsi），克隆内核仅用于复用其 scripts/dtc
+# 编译流水线；即使未来主线 dtsi 变化也不影响本 DTB 复现。
 #
 set -e
 
@@ -20,29 +27,24 @@ else
     echo ">>> 内核源码已存在"
 fi
 
-# 2. 用融合后的 dts 覆盖主线已有的同名校验文件
+# 2. 用完整 dts 覆盖主线已有的同名校验文件
 DTS_TARGET="arch/arm64/boot/dts/rockchip/rk3568-lyt-t68m.dts"
 echo ">>> 覆盖设备树: $DTS_SRC -> $KERNEL_DIR/$DTS_TARGET"
 cp "$DTS_SRC" "$KERNEL_DIR/$DTS_TARGET"
-grep -q "rk3568-lyt-t68m.dtb" "$KERNEL_DIR/arch/arm64/boot/dts/rockchip/Makefile" \
-    && echo ">>> Makefile 已含 rk3568-lyt-t68m.dtb 条目" \
-    || echo "!! 警告: Makefile 中未找到 rk3568-lyt-t68m.dtb"
+if grep -q "rk3568-lyt-t68m.dtb" "$KERNEL_DIR/arch/arm64/boot/dts/rockchip/Makefile"; then
+    echo ">>> Makefile 已含 rk3568-lyt-t68m.dtb 条目"
+else
+    echo "!! 警告: Makefile 中未找到 rk3568-lyt-t68m.dtb，请检查内核版本"
+fi
 
-# 3. 配置内核（确保 ARCH_ROCKCHIP 开启，arm64 defconfig 默认已开）
+# 3. 生成 defconfig（确保 ARCH_ROCKCHIP 开启；编译 dtbs 无需交叉工具链）
 cd "$KERNEL_DIR"
 echo ">>> 生成 defconfig"
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig >/dev/null
-# 兜底确保 rockchip 子树被编译
-if grep -q "CONFIG_ARCH_ROCKCHIP" .config; then
-    grep "CONFIG_ARCH_ROCKCHIP" .config || true
-else
-    echo "CONFIG_ARCH_ROCKCHIP=y" >> .config
-    sed -i 's/# CONFIG_ARCH_ROCKCHIP is not set/CONFIG_ARCH_ROCKCHIP=y/' .config || true
-fi
+make ARCH=arm64 defconfig >/dev/null
 
 # 4. 编译 device tree
 echo ">>> 编译 dtb (jobs=$JOBS)"
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- dtbs -j"$JOBS"
+make ARCH=arm64 dtbs -j"$JOBS"
 
 # 5. 输出
 OUT="arch/arm64/boot/dts/rockchip/rk3568-lyt-t68m.dtb"
@@ -50,6 +52,7 @@ if [ -f "$OUT" ]; then
     echo ">>> 编译成功: $OUT"
     cp "$OUT" ../rk3568-lyt-t68m.dtb
     echo ">>> 产出: $(pwd)/../rk3568-lyt-t68m.dtb"
+    sha256sum ../rk3568-lyt-t68m.dtb
 else
     echo "!! 编译失败，未找到 $OUT"
     exit 1
