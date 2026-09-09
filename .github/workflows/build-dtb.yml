@@ -41,6 +41,24 @@ jobs:
             grep -q "$node" /tmp/check.dts && echo "OK: $node" || { echo "!! 缺少 $node"; exit 1; }
           done
 
+      - name: 校验 NPU/GPU SDK 血统（R5S 官方固件同源，防回归）
+        run: |
+          dtc -I dtb -O dts rk3568-lyt-t68m.dtb -o /tmp/check2.dts
+          # NPU IOMMU 必须含 rockchip,rk3568-iommu（SDK 驱动匹配）
+          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "rockchip,rk3568-iommu" && echo "OK: iommu compatible" || { echo "!! iommu compatible 缺失"; exit 1; }
+          # NPU OPP 表必须含完整 6 项 nvmem-cell-names
+          awk '/npu-opp-table/,/phandle/' /tmp/check2.dts | grep -q "specification_serial_number" && echo "OK: npu nvmem-cells" || { echo "!! npu nvmem-cells 缺失"; exit 1; }
+          # GPU 中断顺序必须为 gpu/mmu/job（SDK 血统）
+          awk '/gpu@fde60000/,/};/' /tmp/check2.dts | grep -q 'interrupt-names = "gpu\\0mmu\\0job"' && echo "OK: gpu irq order" || { echo "!! gpu irq 顺序错误"; exit 1; }
+          # GPU power-model 必须存在
+          awk '/gpu@fde60000/,/};/' /tmp/check2.dts | grep -q "power-model" && echo "OK: gpu power-model" || { echo "!! gpu power-model 缺失"; exit 1; }
+          # GPU OPP 表必须含完整 nvmem-cells
+          awk '/opp-table-1/,/phandle/' /tmp/check2.dts | grep -q "specification_serial_number" && echo "OK: gpu nvmem-cells" || { echo "!! gpu nvmem-cells 缺失"; exit 1; }
+          # 6 个校准 cell 全部存在（spec-serial/mbist-vmin/core-pvtm/remark-serial/gpu-opp-info/npu-opp-info）
+          for cell in "specification-serial-number@7" "mbist-vmin@9" "core-pvtm@2a" "remark-spec-serial-number@56" "gpu-opp-info@3c" "npu-opp-info@42"; do
+            grep -q "$cell" /tmp/check2.dts && echo "OK: $cell" || { echo "!! 缺少 $cell"; exit 1; }
+          done
+
       - name: 生成并输出校验文件
         run: |
           sha256sum rk3568-lyt-t68m.dtb > sha256sums.txt
