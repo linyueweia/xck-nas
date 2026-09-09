@@ -2,18 +2,19 @@
 #
 # xck-nas 云编译脚本（仅编译 DTB，不打包固件）
 #
-# 基于飞牛主线内核 unifreq/linux-6.12.y，编译融合子板补丁
+# 基于飞牛 6.18 内核 unifreq/linux-6.18.y（与 R5S 官方固件
+# 6.18.18.c951-trim 同血统），编译融合子板补丁
 # （SATA2 + SDIO WiFi）且含 NPU/多媒体节点（npu@fde40000 / rkvdec /
 # rkvenc / jpegd / iep / mpp-srv 等完整集群）的 LYT T68M (RK3568)
 # 设备树 rk3568-lyt-t68m.dtb。
 #
 # 说明：dts/rk3568-lyt-t68m.dts 为展开式自包含 DTS（含全部节点与
 # phandle 定义，不依赖内核 dtsi），克隆内核仅用于复用其 scripts/dtc
-# 编译流水线；即使未来主线 dtsi 变化也不影响本 DTB 复现。
+# 编译流水线；即使未来内核 dtsi 变化也不影响本 DTB 复现。
 #
 set -e
 
-KERNEL_REPO="${KERNEL_REPO:-https://github.com/unifreq/linux-6.12.y.git}"
+KERNEL_REPO="${KERNEL_REPO:-https://github.com/unifreq/linux-6.18.y.git}"
 KERNEL_BRANCH="${KERNEL_BRANCH:-main}"
 DTS_SRC="${DTS_SRC:-dts/rk3568-lyt-t68m.dts}"
 KERNEL_DIR="${KERNEL_DIR:-kernel}"

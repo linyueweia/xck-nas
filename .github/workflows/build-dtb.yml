@@ -71,5 +71,5 @@ jobs:
             - SATA2 (sata@fc800000) + SDIO WiFi (AIC8800)
             - GPIO4_C5/C6 LED（state=红 / power=绿）
 
-            构建：克隆 unifreq/linux-6.12.y → make ARCH=arm64 dtbs（仅 DTB，不打包固件）。
+            构建：克隆 unifreq/linux-6.18.y（R5S 官方固件 6.18.18.c951-trim 同血统）→ make ARCH=arm64 dtbs（仅 DTB，不打包固件）。
             fdtfile=rockchip/rk3568-lyt-t68m.dtb。串口 console=ttyS2,1500000。

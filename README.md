@@ -37,7 +37,7 @@
 编译 DTB 不需要交叉工具链，仅需 clone 内核源码 + 宿主 gcc/dtc：
 
 ```bash
-./build-dtb.sh          # 自动：克隆 unifreq/linux-6.12.y → make ARCH=arm64 dtbs
+./build-dtb.sh          # 自动：克隆 unifreq/linux-6.18.y → make ARCH=arm64 dtbs
 sha256sum rk3568-lyt-t68m.dtb
 ```
 
