@@ -15,16 +15,21 @@
 		operating-points-v2 = <0x305>;
 		status = "okay";
 		bus-supply = <0xf6>;
+		pvtm-supply = <0x05>;
 		phandle = <0x304>;
 	};
 
 	bus-npu-opp-table {
 		compatible = "operating-points-v2";
 		opp-shared;
+		nvmem-cells = <0x314>;
 		nvmem-cell-names = "pvtm";
+		rockchip,pvtm-voltage-sel = <0x00 0x14820 0x00 0x14821 0x16378 0x01 0x16379 0x186a0 0x02>;
+		rockchip,pvtm-ch = <0x00 0x05>;
 		phandle = <0x305>;
 
 		opp-700000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0x29b92700>;
 			opp-microvolt = <0xdbba0>;
 			opp-microvolt-L0 = <0xdbba0>;
@@ -33,11 +38,13 @@
 		};
 
 		opp-900000000 {
+			opp-supported-hw = <0xf9 0xffff>;
 			opp-hz = <0x00 0x35a4e900>;
 			opp-microvolt = <0xdbba0>;
 		};
 
 		opp-1000000000 {
+			opp-supported-hw = <0xf9 0xffff>;
 			opp-hz = <0x00 0x3b9aca00>;
 			opp-microvolt = <0xe7ef0>;
 			opp-microvolt-L0 = <0xe7ef0>;
@@ -64,7 +71,7 @@
 	};
 
 	iommu@fde4b000 {
-		compatible = "rockchip,iommu-v2";
+		compatible = "rockchip,rk3568-iommu\0rockchip,iommu-v2";
 		reg = <0x00 0xfde4b000 0x00 0x40>;
 		interrupts = <0x00 0x97 0x04>;
 		interrupt-names = "rknpu_mmu";
@@ -158,26 +165,39 @@
 
 	npu-opp-table {
 		compatible = "operating-points-v2";
-		nvmem-cells = <0x122>;
-		nvmem-cell-names = "leakage\0pvtm\0mbist-vmin";
+		mbist-vmin = <0xc96a8 0xdbba0 0xe7ef0>;
+		nvmem-cells = <0x122 0x314 0x313 0x317 0x312 0x315>;
+		nvmem-cell-names = "leakage\0pvtm\0mbist-vmin\0opp-info\0specification_serial_number\0remark_spec_serial_number";
+		rockchip,supported-hw;
+		rockchip,max-volt = <0xf4240>;
+		rockchip,temp-hysteresis = <0x1388>;
+		rockchip,low-temp = <0x00>;
+		rockchip,low-temp-adjust-volt = <0x00 0x3e8 0xc350>;
+		rockchip,pvtm-voltage-sel = <0x00 0x14820 0x00 0x14821 0x153d8 0x01 0x153d9 0x16378 0x02 0x16379 0x186a0 0x03>;
+		rockchip,pvtm-ch = <0x00 0x05>;
+		rockchip,init-freq = <0xdbba0>;
 		phandle = <0x303>;
 
 		opp-200000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0xbebc200>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
 		};
 
 		opp-300000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0x11b3dc40>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
 		};
 
 		opp-400000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0x17d78400>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
 		};
 
 		opp-600000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0x23c34600>;
 			opp-microvolt = <0xd59f8 0xd59f8 0xf4240>;
 			opp-microvolt-L0 = <0xd59f8 0xd59f8 0xf4240>;
@@ -194,6 +214,7 @@
 		};
 
 		opp-800000000 {
+			opp-supported-hw = <0xfb 0xffff>;
 			opp-hz = <0x00 0x2faf0800>;
 			opp-microvolt = <0xe1d48 0xe1d48 0xf4240>;
 			opp-microvolt-L0 = <0xe1d48 0xe1d48 0xf4240>;
@@ -555,36 +576,64 @@
 
 	opp-table-1 {
 		compatible = "operating-points-v2";
+		mbist-vmin = <0xc96a8 0xdbba0 0xe7ef0>;
+		nvmem-cells = <0x123 0x314 0x313 0x316 0x312 0x315>;
+		nvmem-cell-names = "leakage\0pvtm\0mbist-vmin\0opp-info\0specification_serial_number\0remark_spec_serial_number";
+		rockchip,supported-hw;
+		rockchip,max-volt = <0xf4240>;
+		rockchip,temp-hysteresis = <0x1388>;
+		rockchip,low-temp = <0x00>;
+		rockchip,low-temp-adjust-volt = <0x00 0x320 0xc350>;
+		rockchip,pvtm-voltage-sel = <0x00 0x14820 0x00 0x14821 0x153d8 0x01 0x153d9 0x16378 0x02 0x16379 0x186a0 0x03>;
+		rockchip,pvtm-ch = <0x00 0x05>;
 		phandle = <0x47>;
 
 		opp-200000000 {
 			opp-hz = <0x00 0xbebc200>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
+			opp-supported-hw = <0xfb 0xffff>;
 		};
 
 		opp-300000000 {
 			opp-hz = <0x00 0x11e1a300>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
+			opp-supported-hw = <0xfb 0xffff>;
 		};
 
 		opp-400000000 {
 			opp-hz = <0x00 0x17d78400>;
 			opp-microvolt = <0xcf850 0xcf850 0xf4240>;
+			opp-supported-hw = <0xfb 0xffff>;
 		};
 
 		opp-600000000 {
 			opp-hz = <0x00 0x23c34600>;
 			opp-microvolt = <0xdbba0 0xdbba0 0xf4240>;
+			opp-supported-hw = <0xfb 0xffff>;
+			opp-microvolt-L0 = <0xdbba0 0xdbba0 0xf4240>;
+			opp-microvolt-L1 = <0xd59f8 0xd59f8 0xf4240>;
+			opp-microvolt-L2 = <0xcf850 0xcf850 0xf4240>;
+			opp-microvolt-L3 = <0xcf850 0xcf850 0xf4240>;
 		};
 
 		opp-700000000 {
 			opp-hz = <0x00 0x29b92700>;
 			opp-microvolt = <0xe7ef0 0xe7ef0 0xf4240>;
+			opp-supported-hw = <0xfb 0xffff>;
+			opp-microvolt-L0 = <0xe7ef0 0xe7ef0 0xf4240>;
+			opp-microvolt-L1 = <0xe1d48 0xe1d48 0xf4240>;
+			opp-microvolt-L2 = <0xdbba0 0xdbba0 0xf4240>;
+			opp-microvolt-L3 = <0xd59f8 0xd59f8 0xf4240>;
 		};
 
 		opp-800000000 {
 			opp-hz = <0x00 0x2faf0800>;
 			opp-microvolt = <0xf4240 0xf4240 0xf4240>;
+			opp-supported-hw = <0xf9 0xffff>;
+			opp-microvolt-L0 = <0xf4240 0xf4240 0xf4240>;
+			opp-microvolt-L1 = <0xee098 0xee098 0xf4240>;
+			opp-microvolt-L2 = <0xe7ef0 0xe7ef0 0xf4240>;
+			opp-microvolt-L3 = <0xe1d48 0xe1d48 0xf4240>;
 		};
 	};
 
@@ -1267,10 +1316,10 @@
 	};
 
 	gpu@fde60000 {
-		compatible = "rockchip,rk3568-mali\0arm,mali-bifrost";
+		compatible = "arm,mali-bifrost";
 		reg = <0x00 0xfde60000 0x00 0x4000>;
-		interrupts = <0x00 0x28 0x04 0x00 0x29 0x04 0x00 0x27 0x04>;
-		interrupt-names = "job\0mmu\0gpu";
+		interrupts = <0x00 0x27 0x04 0x00 0x29 0x04 0x00 0x28 0x04>;
+		interrupt-names = "gpu\0mmu\0job";
 		clocks = <0x02 0x01 0x0f 0x1b>;
 		clock-names = "gpu\0bus";
 		#cooling-cells = <0x02>;
@@ -1278,7 +1327,19 @@
 		status = "okay";
 		operating-points-v2 = <0x47>;
 		mali-supply = <0x48>;
+		upthreshold = <0x28>;
+		downdifferential = <0x0a>;
 		phandle = <0xa7>;
+
+		power-model {
+			compatible = "simple-power-model";
+			leakage-range = <0x05 0x0f>;
+			ls = <0xffffa23e 0x5927 0x00>;
+			static-coefficient = <0x186a0>;
+			dynamic-coefficient = <0x3b9>;
+			ts = <0xfffe56a6 0xf87a 0xfffffab5 0x14>;
+			thermal-zone = "gpu-thermal";
+		};
 	};
 
 	video-codec@fdea0400 {
@@ -1920,6 +1981,39 @@
 			gpu-leakage@1d {
 				reg = <0x1d 0x01>;
 				phandle = <0x123>;
+			};
+
+			specification-serial-number@7 {
+				reg = <0x07 0x01>;
+				bits = <0x00 0x05>;
+				phandle = <0x312>;
+			};
+
+			mbist-vmin@9 {
+				reg = <0x09 0x01>;
+				bits = <0x00 0x04>;
+				phandle = <0x313>;
+			};
+
+			core-pvtm@2a {
+				reg = <0x2a 0x02>;
+				phandle = <0x314>;
+			};
+
+			remark-spec-serial-number@56 {
+				reg = <0x56 0x01>;
+				bits = <0x00 0x05>;
+				phandle = <0x315>;
+			};
+
+			gpu-opp-info@3c {
+				reg = <0x3c 0x06>;
+				phandle = <0x316>;
+			};
+
+			npu-opp-info@42 {
+				reg = <0x42 0x06>;
+				phandle = <0x317>;
 			};
 		};
 	};
