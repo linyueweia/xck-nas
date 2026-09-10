@@ -3171,9 +3171,9 @@
 
 		gpio-keys {
 
-			gpio4-a0-k1-pin {
-				rockchip,pins = <0x04 0x00 0x00 0xb6>;
-				phandle = <0xed>;
+			gpio3-b9-k1-pin {
+			rockchip,pins = <0x03 0x09 0x00 0xb8>;
+			phandle = <0xed>;
 			};
 		};
 
@@ -4180,7 +4180,7 @@
 
 		button-reset {
 			debounce-interval = <0x32>;
-			gpios = <0xee 0x00 0x01>;
+			gpios = <0xf3 0x09 0x01>;
 			label = "RESET";
 			linux,code = <0x198>;
 		};
