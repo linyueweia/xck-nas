@@ -41,11 +41,17 @@ jobs:
             grep -q "$node" /tmp/check.dts && echo "OK: $node" || { echo "!! 缺少 $node"; exit 1; }
           done
 
-      - name: 校验 NPU/GPU SDK 血统（R5S 官方固件同源，防回归）
+      - name: 校验 NPU 配置（对齐安卓原厂 DTB，权威基线）
         run: |
           dtc -I dtb -O dts rk3568-lyt-t68m.dtb -o /tmp/check2.dts
-          # NPU IOMMU 必须含 rockchip,rk3568-iommu（SDK 驱动匹配）
-          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "rockchip,rk3568-iommu" && echo "OK: iommu compatible" || { echo "!! iommu compatible 缺失"; exit 1; }
+          # NPU IOMMU 必须为 rockchip,iommu-v2 且不含 rk3568-iommu（安卓原厂）
+          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q '"rockchip,iommu-v2"' && echo "OK: iommu compatible(v2)" || { echo "!! iommu compatible 非 v2"; exit 1; }
+          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "rk3568-iommu" && { echo "!! iommu 仍含 rk3568-iommu"; exit 1; } || echo "OK: iommu 无 rk3568-iommu"
+          # power-controller 必须无 power-domain@6（安卓原厂无 @6）
+          if awk '/power-controller {/,/^\t\t};/' /tmp/check2.dts | grep -q "power-domain@6"; then echo "!! 仍有 power-domain@6"; exit 1; else echo "OK: 无 power-domain@6"; fi
+          # npu/iommu 不得引用 power-domains=<&power 6>（避免悬空引用）
+          awk '/npu@fde40000/,/};/' /tmp/check2.dts | grep -q "power-domains" && { echo "!! npu 仍有 power-domains"; exit 1; } || echo "OK: npu 无 power-domains"
+          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "power-domains" && { echo "!! iommu 仍有 power-domains"; exit 1; } || echo "OK: iommu 无 power-domains"
           # NPU OPP 表必须含完整 6 项 nvmem-cell-names
           awk '/npu-opp-table/,/phandle/' /tmp/check2.dts | grep -q "specification_serial_number" && echo "OK: npu nvmem-cells" || { echo "!! npu nvmem-cells 缺失"; exit 1; }
           # GPU 中断顺序必须为 gpu/mmu/job（SDK 血统）
@@ -58,6 +64,7 @@ jobs:
           for cell in "specification-serial-number@7" "mbist-vmin@9" "core-pvtm@2a" "remark-spec-serial-number@56" "gpu-opp-info@3c" "npu-opp-info@42"; do
             grep -q "$cell" /tmp/check2.dts && echo "OK: $cell" || { echo "!! 缺少 $cell"; exit 1; }
           done
+          echo "===== 全部校验通过（NPU 对齐安卓原厂） ====="
 
       - name: 生成并输出校验文件
         run: |
