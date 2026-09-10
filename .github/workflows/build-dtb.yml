@@ -46,11 +46,13 @@ jobs:
           dtc -I dtb -O dts rk3568-lyt-t68m.dtb -o /tmp/check2.dts
           # NPU IOMMU 必须含 rockchip,rk3568-iommu（飞牛 6.18 内核 iommu 驱动唯一匹配项；安卓原厂的 iommu-v2 在飞牛内核无驱动匹配会导致 probe -22）
           awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "rockchip,rk3568-iommu" && echo "OK: iommu compatible(rk3568-iommu)" || { echo "!! iommu compatible 缺 rk3568-iommu"; exit 1; }
-          # power-controller 必须无 power-domain@6（安卓原厂无 @6）
-          if awk '/power-controller {/,/^\t\t};/' /tmp/check2.dts | grep -q "power-domain@6"; then echo "!! 仍有 power-domain@6"; exit 1; else echo "OK: 无 power-domain@6"; fi
-          # npu/iommu 不得引用 power-domains=<&power 6>（避免悬空引用）
-          awk '/npu@fde40000/,/};/' /tmp/check2.dts | grep -q "power-domains" && { echo "!! npu 仍有 power-domains"; exit 1; } || echo "OK: npu 无 power-domains"
-          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "power-domains" && { echo "!! iommu 仍有 power-domains"; exit 1; } || echo "OK: iommu 无 power-domains"
+          # power-controller 必须含 power-domain@6 且挂 npu-supply（ODROID-M1/飞牛论坛实证：6.18 内核 + rknpu 0.9.8 可用方案保留 PD6+npu-supply；删 @6 会导致 rknpu probe 崩溃）
+          awk '/power-controller {/,/power-domain@7/' /tmp/check2.dts | grep -q "power-domain@6" && echo "OK: 含 power-domain@6" || { echo "!! 缺 power-domain@6"; exit 1; }
+          awk '/power-controller {/,/power-domain@7/' /tmp/check2.dts | grep -q "npu-supply" && echo "OK: power-controller npu-supply" || { echo "!! 缺 npu-supply"; exit 1; }
+          awk '/power-domain@6/,/};/' /tmp/check2.dts | grep -q "pm_qos" && echo "OK: pd6 pm_qos" || { echo "!! pd6 缺 pm_qos"; exit 1; }
+          # npu/iommu 必须引用 power-domains=<&power 6>（genpd 链完整，rknpu probe 不崩）
+          awk '/npu@fde40000/,/};/' /tmp/check2.dts | grep -q "power-domains" && echo "OK: npu power-domains" || { echo "!! npu 缺 power-domains"; exit 1; }
+          awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "power-domains" && echo "OK: iommu power-domains" || { echo "!! iommu 缺 power-domains"; exit 1; }
           # NPU OPP 表必须含完整 6 项 nvmem-cell-names
           awk '/npu-opp-table/,/phandle/' /tmp/check2.dts | grep -q "specification_serial_number" && echo "OK: npu nvmem-cells" || { echo "!! npu nvmem-cells 缺失"; exit 1; }
           # GPU 中断顺序必须为 gpu/mmu/job（SDK 血统）
