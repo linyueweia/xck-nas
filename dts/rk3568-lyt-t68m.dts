@@ -4143,7 +4143,7 @@
 	};
 
 	iommu@fde4b000 {
-		compatible = "rockchip,iommu-v2";
+		compatible = "rockchip,rk3568-iommu";
 		reg = <0x00 0xfde4b000 0x00 0x40>;
 		interrupts = <0x00 0x97 0x04>;
 		interrupt-names = "rknpu_mmu";
