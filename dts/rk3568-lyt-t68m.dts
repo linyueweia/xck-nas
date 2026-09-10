@@ -1347,10 +1347,7 @@
 		resets = <0x12 0xd4>;
 		reset-names = "reset";
 		status = "okay";
-		no-sdio;
-		no-mmc;
 		bus-width = <0x04>;
-		cap-mmc-highspeed;
 		cap-sd-highspeed;
 		disable-wp;
 		vmmc-supply = <0x5e>;
@@ -1394,7 +1391,6 @@
 		status = "okay";
 		bus-width = <0x08>;
 		max-frequency = <0xbebc200>;
-		mmc-hs200-1_8v;
 		non-removable;
 		pinctrl-names = "default";
 		pinctrl-0 = <0x64 0x65 0x66 0x67>;
@@ -4191,16 +4187,19 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <0x102 0x103>;
 
-		led-power {
+		power {
+			label = "green:power";
 			color = <0x02>;
 			function = "power";
+			default-state = "on";
 			gpios = <0xee 0x16 0x00>;
 		};
 
-		led-status {
-			label = "t68m:red:user";
+		state {
+			label = "red:state";
 			color = <0x01>;
 			function = "status";
+			default-state = "on";
 			gpios = <0xee 0x15 0x00>;
 		};
 	};
