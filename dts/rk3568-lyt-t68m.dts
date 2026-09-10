@@ -3179,24 +3179,14 @@
 
 		gpio-leds {
 
-			lan1-led-pin {
-				rockchip,pins = <0x03 0x1e 0x00 0xb6>;
-				phandle = <0xef>;
+			led-power-pin {
+				rockchip,pins = <0x04 0x16 0x00 0xb6>;
+				phandle = <0x102>;
 			};
 
-			lan2-led-pin {
-				rockchip,pins = <0x03 0x1f 0x00 0xb6>;
-				phandle = <0xf0>;
-			};
-
-			sys-led-pin {
-				rockchip,pins = <0x04 0x1a 0x00 0xb6>;
-				phandle = <0xf1>;
-			};
-
-			wan-led-pin {
-				rockchip,pins = <0x02 0x11 0x00 0xb6>;
-				phandle = <0xf2>;
+			led-status-pin {
+				rockchip,pins = <0x04 0x15 0x00 0xb6>;
+				phandle = <0x103>;
 			};
 		};
 	};
@@ -4199,35 +4189,19 @@
 	gpio-leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
-		pinctrl-0 = <0xef 0xf0 0xf1 0xf2>;
+		pinctrl-0 = <0x102 0x103>;
 
-		led-lan1 {
+		led-power {
 			color = <0x02>;
-			default-state = "off";
-			function = "lan";
-			function-enumerator = <0x01>;
-			gpios = <0xf3 0x1e 0x00>;
-		};
-
-		led-lan2 {
-			color = <0x02>;
-			default-state = "off";
-			function = "lan";
-			function-enumerator = <0x02>;
-			gpios = <0xf3 0x1f 0x00>;
-		};
-
-		led-sys {
-			color = <0x01>;
 			function = "power";
-			gpios = <0xee 0x1a 0x00>;
+			gpios = <0xee 0x16 0x00>;
 		};
 
-		led-wan {
-			color = <0x02>;
-			default-state = "off";
-			function = "wan";
-			gpios = <0xc9 0x11 0x00>;
+		led-status {
+			label = "t68m:red:user";
+			color = <0x01>;
+			function = "status";
+			gpios = <0xee 0x15 0x00>;
 		};
 	};
 };
