@@ -1,14 +1,13 @@
 # xck-nas
 
-为 **LYT T68M（RK3568）** 生成**完整设备树 DTB**（`rk3568-lyt-t68m.dtb`）。
-
-> 本仓库只编译 **DTB**，不再打包完整固件。
+为 **LYT T68M（RK3568）** 生成**完整设备树 DTB**（`rk3568-lyt-t68m.dtb`），并支持**打包完整 fnOS 固件镜像**（`.img`）。
 
 ## 产物
 
 | 产物 | 路径 | 说明 |
 |------|------|------|
-| 完整 DTB | `dist/rk3568-lyt-t68m.dtb` | 已编译验证的固定产物（SHA256 `e4c4c30a...`），含 NPU/多媒体集群 |
+| 完整 DTB | `dist/rk3568-lyt-t68m.dtb` | 已编译验证的固定产物（SHA256 `d96ff486...`），含 NPU/多媒体集群 |
+| 完整固件 | Actions Release | 触发 `Build FnOS T68M Image` workflow，发布 `lyt-t68m_YYYYMMDD.img.xz` |
 | 云编译 DTB | Actions artifact | 每次触发 `Build DTB only` workflow 重新构建 |
 
 ## 这个 DTB 是什么
@@ -27,7 +26,15 @@
 
 ## 使用
 
-### GitHub Actions 云编译（推荐）
+### 打包完整 fnOS 固件（推荐）
+
+**Actions → Build FnOS T68M Image → Run workflow** 手动触发。
+流程：下载官方 `ophub/fnnas` rockchip 基镜像 → 注入 RK3568 u-boot
+（idbloader + u-boot.itb）→ 替换 `fnEnv.txt` / `extlinux.conf` /
+`rk3568-lyt-t68m.dtb`（`d96ff486...` 最终版）→ 可选扩容 rootfs →
+`.img.xz` + SHA256 发布到 Release。
+
+### GitHub Actions 云编译 DTB
 
 **Actions → Build DTB only → Run workflow** 手动触发；或 push 修改 `dts/`
 或 `build-dtb.sh` 时自动触发。产物以 artifact 形式保留 7 天，tag 推送自动发 Release。
@@ -44,10 +51,13 @@ sha256sum rk3568-lyt-t68m.dtb
 ## 目录结构
 
 ```
-dist/rk3568-lyt-t68m.dtb          # 完整预编译 dtb（固定产物，SHA256 e4c4c30a...）
+dist/rk3568-lyt-t68m.dtb          # 完整预编译 dtb（固定产物，SHA256 d96ff486...）
 dts/rk3568-lyt-t68m.dts           # 展开式完整设备树源码（不含 #include，自包含）
 build-dtb.sh                      # DTB 编译脚本（仅编译，不打包固件）
+buildfnos.sh                      # fnOS 固件打包脚本（官方基镜像 + u-boot + dtb）
+uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dtb）
 .github/workflows/build-dtb.yml   # GitHub Actions 云编译（仅 DTB）
+.github/workflows/build-fnos-t68m.yml  # GitHub Actions 打包完整固件
 ```
 
 ## 已知约束

@@ -1,0 +1,125 @@
+name: Build FnOS T68M Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ROOT_SIZE:
+        description: "rootfs 扩容大小（GiB，默认 6）"
+        required: false
+        default: "6"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build T68M fnOS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq xz-utils
+
+      - name: Download Latest Rockchip FnNAS Image
+        id: download
+        run: |
+          set -e
+          REPO="ophub/fnnas"
+          TAG="fnnas_base_image"
+          API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+          RESPONSE=$(curl -sL "$API_URL")
+          ASSET_URL=$(echo "$RESPONSE" | jq -r '
+            .assets[] | select(.name | test("rockchip") and endswith(".img.xz")) | .browser_download_url
+          ' | sort -V | tail -n 1)
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "❌ No Rockchip .img.xz asset found"
+            exit 1
+          fi
+          FILENAME=$(basename "$ASSET_URL")
+          curl -L -o "$FILENAME" "$ASSET_URL"
+          echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
+
+      - name: Decompress base image
+        run: |
+          mkdir -p fnnas-arm64
+          xz -d -c "${{ steps.download.outputs.filename }}" > fnnas-arm64/fnnas-arm64.img
+
+      - name: Build T68M image
+        id: build
+        run: |
+          export DEVICE=lyt-t68m
+          export ROOT_SIZE="${{ github.event.inputs.ROOT_SIZE }}"
+          mkdir -p build-logs
+          bash buildfnos.sh &> "build-logs/lyt-t68m.log" || (
+            cat "build-logs/lyt-t68m.log"
+            exit 1
+          )
+
+      - name: Verify injected DTB
+        run: |
+          cat > /tmp/verify_dtb.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          IMG=$(find out -name "*.img" | head -n1)
+          BOOT_IMG="/tmp/bootpart.img"
+          # boot partition at LBA 65536 = 32MiB offset, size 360MiB (img 分区1)
+          dd if="$IMG" of="$BOOT_IMG" bs=1M skip=32 count=360 2>/dev/null
+          mkdir -p /tmp/bm
+          sudo mount -o loop,ro "$BOOT_IMG" /tmp/bm || { sudo mount -o loop "$BOOT_IMG" /tmp/bm; }
+          SRC_SHA=$(sha256sum uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb | awk '{print $1}')
+          ING_SHA=$(sha256sum /tmp/bm/dtb/rockchip/rk3568-lyt-t68m.dtb | awk '{print $1}')
+          echo "=== source dtb: $SRC_SHA"
+          echo "=== img    dtb: $ING_SHA"
+          echo "=== fnEnv.txt ==="
+          cat /tmp/bm/fnEnv.txt 2>/dev/null || true
+          if [ "$SRC_SHA" = "$ING_SHA" ]; then
+            echo "✅ DTB 一致"
+          else
+            echo "❌ DTB 不一致"
+            sudo umount /tmp/bm 2>/dev/null || true
+            exit 1
+          fi
+          sudo umount /tmp/bm 2>/dev/null || true
+          SCRIPT
+          chmod +x /tmp/verify_dtb.sh
+          bash /tmp/verify_dtb.sh
+
+      - name: Upload build log (private)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-lyt-t68m-${{ github.run_number }}
+          path: build-logs/
+
+      - name: Compress built image
+        run: |
+          mkdir -p out-compressed
+          for f in out/*.img; do
+            xz -T0 -z -9 -c "$f" > "out-compressed/$(basename "$f").xz"
+          done
+
+      - name: Generate SHA256
+        run: |
+          cd out-compressed
+          sha256sum *.img.xz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: fnos_t68m_${{ github.run_number }}
+          files: out-compressed/*
+          body: |
+            🎉 T68M (RK3568) fnOS 自定义镜像
+            
+            - 基镜像: ophub/fnnas rockchip (官方最新)
+            - 设备树: rk3568-lyt-t68m.dtb (NPU 修复最终版)
+            - u-boot: rk3568 idbloader + u-boot.itb
+            - rootfs 默认: ${{ github.event.inputs.ROOT_SIZE }} GiB
+            
+            ⚠️ 仅支持 eMMC/SD 存储，刷写前请备份数据
