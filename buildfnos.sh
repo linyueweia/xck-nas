@@ -15,7 +15,7 @@ OUT_DIR="$(pwd)/out"
 UBOOT_BASE="uboot"
 UBOOT_PATH=""
 
-ROOT_SIZE="${ROOT_SIZE:-6}"   # GiB（默认 6）
+ROOT_SIZE="${ROOT_SIZE:-}"   # 默认空 = 保持官方 resize 行为（固件大小与官方一致）；指定则覆盖（如 ROOT_SIZE=8 表示 8GiB）
 
 ROOT_MOUNT="/mnt/fnnas_root"
 BOOT_MOUNT="/mnt/fnnas_boot"
@@ -169,13 +169,17 @@ ROOT_PART="${LOOP_DEVICE}p2"
 
 sudo mount "$ROOT_PART" "$ROOT_MOUNT" || { echo "❌ 挂载 root 分区失败"; exit 1; }
 
-# 处理 resize-rootfs.sh
+# 处理 resize-rootfs.sh（仅当显式指定 ROOT_SIZE 时才修改，默认保持官方大小）
 RESIZE_ROOTFS_PATH="$ROOT_MOUNT/usr/trim/bin/resize-rootfs.sh"
-if [[ -f "$RESIZE_ROOTFS_PATH" ]]; then
-  echo "✏️ 修改 resize-rootfs.sh (目标大小: ${ROOT_SIZE}GiB)"
-  sudo sed -i "s/64/$ROOT_SIZE/g" "$RESIZE_ROOTFS_PATH" || { echo "❌ 修改 resize-rootfs.sh 失败"; exit 1; }
+if [[ -n "${ROOT_SIZE:-}" ]]; then
+  if [[ -f "$RESIZE_ROOTFS_PATH" ]]; then
+    echo "✏️ 修改 resize-rootfs.sh (目标大小: ${ROOT_SIZE}GiB)"
+    sudo sed -i "s/64/$ROOT_SIZE/g" "$RESIZE_ROOTFS_PATH" || { echo "❌ 修改 resize-rootfs.sh 失败"; exit 1; }
+  else
+    echo "⚠️ 未找到 resize-rootfs.sh"
+  fi
 else
-  echo "⚠️ 未找到 resize-rootfs.sh"
+  echo "ℹ️ 未指定 ROOT_SIZE，保持官方默认大小（不修改 resize-rootfs.sh）"
 fi
 
 sudo umount "$ROOT_MOUNT" || { echo "❌ 卸载 root 分区失败"; exit 1; }

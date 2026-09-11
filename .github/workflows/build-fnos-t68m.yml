@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       ROOT_SIZE:
-        description: "rootfs 扩容大小（GiB，默认 6）"
+        description: "rootfs 扩容大小（GiB，留空 = 官方默认大小）"
         required: false
-        default: "6"
+        default: ""
 
 permissions:
   contents: write
@@ -120,6 +120,6 @@ jobs:
             - 基镜像: ophub/fnnas rockchip (官方最新)
             - 设备树: rk3568-lyt-t68m.dtb (NPU 修复最终版)
             - u-boot: rk3568 idbloader + u-boot.itb
-            - rootfs 默认: ${{ github.event.inputs.ROOT_SIZE }} GiB
+            - rootfs: 官方默认大小（未扩容）
             
             ⚠️ 仅支持 eMMC/SD 存储，刷写前请备份数据
