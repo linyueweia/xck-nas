@@ -24,7 +24,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq xz-utils
 
-      - name: Download Official R5S FnOS Base Image
+      - name: Download Official FnOS Universal Base Image
         id: download
         run: |
           set -e
@@ -118,7 +118,7 @@ jobs:
           body: |
             🎉 T68M (RK3568) fnOS 自定义镜像
             
-            - 基镜像: 飞牛官方 nanopi-r5s 1.2.0302 (fnnas-base-images v1.0.0)
+            - 基镜像: 飞牛官方通用基镜像 (fnnas-base-images v1.0.0)
             - 设备树: rk3568-lyt-t68m.dtb (NPU 修复最终版)
             - u-boot: rk3568 idbloader + u-boot.itb
             - rootfs: 官方默认大小（未扩容）
