@@ -26,7 +26,7 @@
         │     ├── 覆盖 extlinux/extlinux.conf（存在时）
         │     └── 强覆盖 dtb/rockchip/rk3568-lyt-t68m.dtb（d96ff486 最终版）
         ├── 挂载 rootfs 分区（btrfs）
-        │     └── 可选扩容：ROOT_SIZE 指定时改写 resize-rootfs.sh（默认留空 = 官方大小）
+        │     └── 不扩容，保持官方默认大小
         ▼
    out/lyt-t68m_YYYYMMDD.img
         │  xz -9 压缩
@@ -63,8 +63,8 @@
 ### 打包完整 fnOS 固件（推荐）
 
 **Actions → Build FnOS T68M Image → Run workflow** 手动触发。
-可选输入 `ROOT_SIZE`（rootfs 扩容 GiB，留空 = 官方默认大小）。
 构建完成后 Release 产出 `.img.xz` + SHA256SUMS，直接下载刷写。
+rootfs 不扩容，保持官方默认大小。
 
 ### GitHub Actions 云编译 DTB
 

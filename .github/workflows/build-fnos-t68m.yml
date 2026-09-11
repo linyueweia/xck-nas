@@ -2,11 +2,6 @@ name: Build FnOS T68M Image
 
 on:
   workflow_dispatch:
-    inputs:
-      ROOT_SIZE:
-        description: "rootfs 扩容大小（GiB，留空 = 官方默认大小）"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -53,7 +48,6 @@ jobs:
         id: build
         run: |
           export DEVICE=lyt-t68m
-          export ROOT_SIZE="${{ github.event.inputs.ROOT_SIZE }}"
           mkdir -p build-logs
           bash buildfnos.sh &> "build-logs/lyt-t68m.log" || (
             cat "build-logs/lyt-t68m.log"
