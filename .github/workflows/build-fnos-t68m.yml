@@ -24,29 +24,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq xz-utils
 
-      - name: Download Latest Rockchip FnNAS Image
+      - name: Download Official R5S FnOS Base Image
         id: download
         run: |
           set -e
-          REPO="ophub/fnnas"
-          TAG="fnnas_base_image"
+          REPO="linyueweia/fnnas-base-images"
+          TAG="v1.0.0"
           API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
           RESPONSE=$(curl -sL "$API_URL")
           ASSET_URL=$(echo "$RESPONSE" | jq -r '
-            .assets[] | select(.name | test("rockchip") and endswith(".img.xz")) | .browser_download_url
+            .assets[] | select(.name | endswith(".img.gz")) | .browser_download_url
           ' | sort -V | tail -n 1)
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
-            echo "❌ No Rockchip .img.xz asset found"
+            echo "❌ No .img.gz asset found in linyueweia/fnnas-base-images"
             exit 1
           fi
           FILENAME=$(basename "$ASSET_URL")
+          echo "Downloading: $FILENAME"
           curl -L -o "$FILENAME" "$ASSET_URL"
           echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
 
       - name: Decompress base image
         run: |
           mkdir -p fnnas-arm64
-          xz -d -c "${{ steps.download.outputs.filename }}" > fnnas-arm64/fnnas-arm64.img
+          gunzip -c "${{ steps.download.outputs.filename }}" > fnnas-arm64/fnnas-arm64.img
 
       - name: Build T68M image
         id: build
@@ -117,7 +118,7 @@ jobs:
           body: |
             🎉 T68M (RK3568) fnOS 自定义镜像
             
-            - 基镜像: ophub/fnnas rockchip (官方最新)
+            - 基镜像: 飞牛官方 nanopi-r5s 1.2.0302 (fnnas-base-images v1.0.0)
             - 设备树: rk3568-lyt-t68m.dtb (NPU 修复最终版)
             - u-boot: rk3568 idbloader + u-boot.itb
             - rootfs: 官方默认大小（未扩容）
