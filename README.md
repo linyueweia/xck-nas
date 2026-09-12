@@ -20,7 +20,7 @@
 
 | 流水线 | Workflow | 产物 | 触发方式 |
 |--------|----------|------|----------|
-| **完整固件打包** | `Build FnOS T68M Image` | `lyt-t68m_YYYYMMDD.img.xz` + SHA256SUMS（发布到 Release） | 手动触发 |
+| **完整固件打包** | `Build FnOS T68M Image` | `fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img.xz` + SHA256SUMS（发布到 Release） | 手动触发 |
 | **DTB 云编译** | `Build DTB only` | `rk3568-lyt-t68m.dtb`（artifact 保留 7 天；tag 推送自动发 Release） | 手动 / push `dts/**`、`build-dtb.sh` |
 
 ## DTB 移植血统与 NPU 修复
@@ -84,10 +84,10 @@ DTB 作为骨架。移植流程：
         ├── 挂载 rootfs 分区（btrfs）
         │     └── 不扩容，保持官方默认大小
         ▼
-   out/lyt-t68m_YYYYMMDD.img
+   out/fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img
         │  xz -9 压缩
         ▼
-   out-compressed/lyt-t68m_YYYYMMDD.img.xz + SHA256SUMS
+   out-compressed/fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img.xz + SHA256SUMS
         │  action-gh-release
         ▼
    Release: fnos_t68m_<run_number>
