@@ -48,6 +48,8 @@ jobs:
         id: build
         run: |
           export DEVICE=lyt-t68m
+          export DEVICE_LABEL=LYT-T68M
+          export BUILD_NUM=${{ github.run_number }}
           mkdir -p build-logs
           bash buildfnos.sh &> "build-logs/lyt-t68m.log" || (
             cat "build-logs/lyt-t68m.log"
@@ -107,12 +109,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: fnos_t68m_${{ github.run_number }}
+          tag_name: fnos_LYT-T68M_${{ github.run_number }}
           files: out-compressed/*
           body: |
-            🎉 T68M (RK3568) fnOS 自定义镜像
+            🎉 LYT-T68M (RK3568) fnOS 自定义镜像
             
-            - 基镜像: 飞牛官方通用基镜像 (fnnas-base-images v1.0.0)
+            - 基镜像: 飞牛官方通用基镜像 (fnnas-base-images)
             - 设备树: rk3568-lyt-t68m.dtb (NPU 修复最终版)
             - u-boot: rk3568 idbloader + u-boot.itb
             - rootfs: 官方默认大小（未扩容）

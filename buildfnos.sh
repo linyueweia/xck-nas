@@ -8,7 +8,7 @@ echo "FNNAS 镜像自动修改与打包脚本 (CI版)"
 echo "========================================"
 echo
 
-: "${DEVICE:?❌ 请指定 DEVICE，例如：DEVICE=Orangepi-r1plus-lts}"
+: "${DEVICE:?❌ 请指定 DEVICE，例如：DEVICE=lyt-t68m}"
 
 IMG_DIR="fnnas-arm64"
 OUT_DIR="$(pwd)/out"
@@ -19,6 +19,14 @@ ROOT_SIZE="${ROOT_SIZE:-}"   # 保留变量以兼容调用方引用；默认空 
 
 ROOT_MOUNT="/mnt/fnnas_root"
 BOOT_MOUNT="/mnt/fnnas_boot"
+
+# 产物命名（官方风格）：fnos_Mainland-PE_arm_<版本>_<设备标识>_<构建号>.img
+#  - DEVICE        : 设备目录名（小写，用于匹配 uboot/<soc>/<device>）
+#  - DEVICE_LABEL  : 文件名中的设备标识（默认 = DEVICE；CI 传 LYT-T68M）
+#  - BUILD_NUM     : 构建号（CI 传 run_number；本地默认日期）
+: "${DEVICE_LABEL:=${DEVICE}}"
+: "${BUILD_NUM:=$(date +%Y%m%d)}"
+FNOS_VERSION=""   # 构建期间从 rootfs /etc/os-release 读取
 
 mkdir -p "$OUT_DIR" || { echo "❌ 创建输出目录失败"; exit 1; }
 
@@ -51,7 +59,7 @@ ORIGINAL_IMG=$(find "$IMG_DIR" -maxdepth 1 -name "*.img" | head -n 1)
 echo "✅ 找到原始镜像: $ORIGINAL_IMG"
 
 TIMESTAMP=$(date +%Y%m%d)
-MODIFIED_IMG="$OUT_DIR/${DEVICE}_${TIMESTAMP}.img"
+MODIFIED_IMG="$OUT_DIR/${DEVICE_LABEL}_${BUILD_NUM}.img"
 
 echo "📋 创建镜像副本:"
 echo "   $MODIFIED_IMG"
@@ -171,6 +179,10 @@ sudo mount "$ROOT_PART" "$ROOT_MOUNT" || { echo "❌ 挂载 root 分区失败"; 
 
 # 不扩容：rootfs 保持官方默认大小，不做任何修改
 
+# 读取 fnOS 版本号用于产物命名（/etc/os-release 是 Debian/fnOS 标准位置）
+FNOS_VERSION=$(sed -n 's/^VERSION_ID="\?\([^"]*\)"\?/\1/p' "$ROOT_MOUNT/etc/os-release" 2>/dev/null | head -n1)
+[[ -n "$FNOS_VERSION" ]] || { echo "⚠️ 无法从 rootfs 读取 VERSION_ID，跳过版本号"; }
+
 sudo umount "$ROOT_MOUNT" || { echo "❌ 卸载 root 分区失败"; exit 1; }
 
 cleanup
@@ -179,8 +191,15 @@ echo "✅ 分区处理完成"
 echo
 echo "========================================"
 echo "🎉 处理完成"
-echo "📦 设备: $DEVICE"
+echo "📦 设备: $DEVICE ($DEVICE_LABEL)"
 echo "📁 输出目录: $OUT_DIR"
 echo "📦 镜像文件: $(basename "$MODIFIED_IMG")"
 echo "========================================"
+
+# 官方风格最终命名：fnos_Mainland-PE_arm_<VER>_<DEVICE>_<BUILD>.img
+if [[ -n "$FNOS_VERSION" ]]; then
+  FINAL_IMG="$OUT_DIR/fnos_Mainland-PE_arm_${FNOS_VERSION}_${DEVICE_LABEL}_${BUILD_NUM}.img"
+  mv "$MODIFIED_IMG" "$FINAL_IMG" || { echo "❌ 重命名输出镜像失败"; exit 1; }
+  echo "📦 最终产物: $(basename "$FINAL_IMG")"
+fi
 exit 0
