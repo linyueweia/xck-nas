@@ -4,13 +4,13 @@
 
 ## 现状速览（2026-09）
 
-- **DTB 基底**：飞牛 6.18 原生 **EasePi R1**（`rk3568-easepi-r1.dtb`）展开式骨架 + **T68M 板级覆盖**。
-- **NPU 已验证修复**：`iommu@fde4b000` compatible 为**双值**
+- **DTB 基底**：飞牛 6.18 原生 **NanoPi R5S**（`rk3568-nanopi-r5s.dtb`，取自飞牛官方基镜像 BOOT 分区）展开式骨架 + **T68M 板级覆盖**。
+- **NPU 已验证**：`iommu@fde4b000` compatible 为**双值**
   `"rockchip,rk3568-iommu" "rockchip,iommu-v2"`，同时匹配
   6.18 主线 rk3568-iommu v2 驱动与 Rockchip SDK 血统（与 SDK 官方 DTB 语义一致）。
 - **最终产物哈希**：
-  - `dts/rk3568-lyt-t68m.dts` → `599ef97772e58107b4d58dc2653e6655f4eaa29439f6664f024729d10760ee8e`
-  - `dist/rk3568-lyt-t68m.dtb` = `uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb` = `0e56384e2de21f76132cb10f37812f8efa7dd261c03b1802882801e1852720c8`
+  - `dts/rk3568-lyt-t68m.dts` → `3cc8ffc2d80d8e857678700e48172b0edd219544625f4a0f18702b2a5e9d2075`
+  - `dist/rk3568-lyt-t68m.dtb` = `uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb` = `4f785bc7d9731763405a3a66605bf0ffa2c0035c28d8493f6dd4a3791beb6db6`
 - **内核**：`6.18.18.c951-trim`（飞牛通用内核，含完整 Rockchip drivers），**rknpu v0.9.8**。
 - 固件 rootfs **不扩容**，保持官方默认大小（`chore: 移除扩容逻辑`，commit `6bf3f10`）。
 
@@ -27,12 +27,22 @@
 
 ### 基底选择（重要）
 
-本仓库 DTB **只以飞牛 6.18 原生 EasePi R1 为骨架**，不使用其他方案的
+本仓库 DTB **以飞牛 6.18 原生 NanoPi R5S 为骨架**，不使用其他方案的
 DTB 作为骨架。移植流程：
 
-1. 从飞牛 6.18 官方基镜像提取 EasePi R1 原生 DTB（`rk3568-easepi-r1.dtb`）并反编译为展开式 DTS；
-2. 以 EasePi R1 骨架为顶层顺序基准，将 T68M 板级节点（网口/PCIe/SATA2/SDIO/LED/regulator/PMIC 等）按「名+地址」配对替换或追加；
-3. SoC 通用节点（含 NPU 集群、iommu、opp 表、时钟、电源域）默认**保留骨架值**，T68M 特有的板级电源/外设引用保留 T68M 值。
+1. 从飞牛 6.18 官方基镜像（`fnnas-official-arm64-image_rockchip.img`）BOOT 分区提取
+   原生 DTB（`rk3568-nanopi-r5s.dtb`，SHA256 `95d4f336...`）并反编译为展开式 DTS；
+2. 以 R5S 骨架为顶层顺序基准，将 T68M 板级节点（网口/PCIe/SATA2/SDIO/LED/regulator/PMIC 等）
+   按「名+地址」配对替换或追加；
+3. SoC 通用节点（含 NPU 集群、iommu、opp 表、时钟、电源域）默认**保留骨架值**，
+   T68M 特有的板级电源/外设引用保留 T68M 值。
+
+> 骨架与 T68M 的 SoC 级定义同源（飞牛 6.18 基镜像同一套 RK3568 SoC 展开），
+> R5S 与 T68M 的 186 个公共顶层节点中 168 个语义完全一致，仅 18 个板级节点
+> （SATA/Ethernet/PCIe/MMC/pinctrl/多媒体 opp 挂载等）按 T68M 硬件覆盖；
+> NPU 核心 5 节点（`npu@fde40000`/`iommu@fde4b000`/`bus-npu`/opp 表）与 R5S 骨架
+> 语义零差异。R5S 骨架独有的 `gpio-leds`（R5S 板载 LED）不适用于 T68M，已剔除；
+> T68M 独有的 `leds`/`sdio-pwrseq`/`vcc3v3-minipcie-regulator` 正确保留。
 
 > 排查记录：前期曾因融合脚本把 `iommu@fde4b000`（NPU 的 MMU）错误覆盖为
 > 旧 T68M 固件的**单值** `"rockchip,rk3568-iommu"`——虽然能匹配主线，
@@ -49,7 +59,7 @@ DTB 作为骨架。移植流程：
 | efuse | `npu-opp-table` 6 个 nvmem-cells 全部正确指向：`npu-leakage@1c`/`core-pvtm@2a`/`mbist-vmin@9`/`npu-opp-info@42`/spec-serial@7/remark-spec-serial@56 |
 | OPP 表 | 8 档（200MHz@850mV → 1000MHz@1000mV），`opp-supported-hw` 掩码 0xfb/0xf9，与骨架/SDK 三方一致 |
 | 引用完整性 | 257 个 phandle 全唯一、565 节点无重复、无悬空引用、NPU/iommu/bus-npu status 全 okay |
-| 归属核对 | NPU 核心 5 节点与 EasePi R1 骨架**语义零差异**；与 SDK 官方 DTB（RK3568 平台参考）交叉验证一致 |
+| 归属核对 | NPU 核心 5 节点与 R5S 骨架**语义零差异**；与 SDK 官方 DTB（RK3568 平台参考）交叉验证一致 |
 
 ## 这个 DTB 包含什么
 
@@ -80,7 +90,7 @@ DTB 作为骨架。移植流程：
         ├── 挂载 BOOT 分区（ext4）
         │     ├── 覆盖 fnEnv.txt（fdtfile=rk3568-lyt-t68m.dtb, kernelfile=vmlinuz-6.18.18.c951-trim）
         │     ├── 覆盖 extlinux/extlinux.conf
-        │     └── 强覆盖 dtb/rockchip/rk3568-lyt-t68m.dtb（0e56384e 最终版）
+        │     └── 强覆盖 dtb/rockchip/rk3568-lyt-t68m.dtb（4f785bc7 最终版）
         ├── 挂载 rootfs 分区（btrfs）
         │     └── 不扩容，保持官方默认大小
         ▼
@@ -118,14 +128,15 @@ DTB 作为骨架。移植流程：
 
 ```bash
 ./build-dtb.sh          # 自动：克隆 unifreq/linux-6.18.y → make ARCH=arm64 dtbs
-sha256sum rk3568-lyt-t68m.dtb   # 应等于 0e56384e...
+sha256sum rk3568-lyt-t68m.dtb   # 应等于 4f785bc7...
 ```
 
 ## 目录结构
 
 ```
-dts/rk3568-lyt-t68m.dts           # 展开式完整设备树源码（不含 #include，自包含）SHA256 599ef977...
-dist/rk3568-lyt-t68m.dtb          # 完整预编译 dtb（SHA256 0e56384e...）
+dts/rk3568-lyt-t68m.dts           # 展开式完整设备树源码（不含 #include，自包含）SHA256 3cc8ffc2...
+dist/rk3568-lyt-t68m.dtb          # 完整预编译 dtb（SHA256 4f785bc7...）
+dist/rk3568-nanopi-r5s-official.dtb  # R5S 官方原生 dtb（骨架来源，SHA256 95d4f336...）
 build-dtb.sh                      # DTB 编译脚本（仅编译，不打包固件）
 buildfnos.sh                      # fnOS 固件打包脚本（基镜像 + u-boot + dtb）
 uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dtbfinal）
@@ -141,7 +152,7 @@ uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dt
 | `u-boot.itb` | FIT 格式 u-boot（RK3568 通用，1.1MB） |
 | `fnEnv.txt` | 引导变量：`fdtfile=rockchip/rk3568-lyt-t68m.dtb` + `cma=256M` |
 | `extlinux.conf` | 系统引导配置（earlycon @ fe660000，console=ttyS2,1500000） |
-| `rk3568-lyt-t68m.dtb` | 最终设备树（0e56384e，与 dist/ 一致，76481B） |
+| `rk3568-lyt-t68m.dtb` | 最终设备树（4f785bc7，与 dist/ 一致，76481B） |
 
 ## 已知约束
 
@@ -164,8 +175,9 @@ cat /sys/class/devfreq/fdab0000.npu/cur_freq   # NPU 当前频率（应 ≈900MH
 
 | commit | 内容 |
 |--------|------|
+| （本次） | **feat**: DTB 基底切换至飞牛 6.18 原生 NanoPi R5S 骨架（460 节点三方归属全对齐，仅 phandle 编号重排；剔除 R5S 板载 gpio-leds，保留 T68M leds/sdio-pwrseq/minipcie regulator） |
 | `5a2ceb9` | **fix**: NPU `iommu@fde4b000` compatible 恢复双值（对齐骨架，兼容主线+SDK 血统） |
-| `bd08181` | **feat**: T68M DTB 移植至 6.18 EasePi R1 骨架（460 节点语义对齐，仅 phandle 编号重排） |
+| `bd08181` | **feat**: T68M DTB 移植至 6.18 EasePi R1 骨架（历史基底，已被 R5S 取代） |
 | `6bf3f10` | **chore**: 移除扩容逻辑（rootfs 保持官方默认大小） |
 | `0b20045` | **docs**: README |
 | `6a7be17` | **ci**: 使用自家通用基镜像源，去除旧方案字样 |
