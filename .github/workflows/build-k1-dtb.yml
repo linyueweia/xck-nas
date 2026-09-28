@@ -2,10 +2,6 @@ name: Build K1 DTB only (from linux-6.18.y)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'dts/kickpi-k1/**'
-      - '.github/workflows/build-k1-dtb.yml'
 
 permissions:
   contents: write
@@ -26,82 +22,47 @@ jobs:
         run: |
           set -x
           git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel 2>&1 | tail -3
-          ls kernel/arch/arm64/boot/dts/rockchip/ | grep -E "^rk3568" | head -5
 
-      - name: 放入 K1 官方 DTS/DTSI（用 6.18 内核的 rk3568.dtsi）
+      - name: 编译 K1 DTB（展开式 DTS，自包含，不依赖内核 label）
         run: |
           set -x
           D=kernel/arch/arm64/boot/dts/rockchip
-          echo "=== 仓库里的 K1 dts ==="
-          ls -la dts/kickpi-k1/ 2>/dev/null || echo "(没有 dts/kickpi-k1 目录)"
-          # 只复制 K1 特有的（不覆盖内核的 rk3568.dtsi / rk356x.dtsi / rk3568-pinctrl.dtsi / rockchip-pinconf.dtsi）
-          for f in dts/kickpi-k1/*.dts dts/kickpi-k1/rk3568-kickpi-*.dtsi; do
-            [ -f "$f" ] && cp -v "$f" "$D/" || true
-          done
-          echo "=== 放入后（K1 相关）==="
-          ls -la "$D"/rk3568-kickpi-* 2>&1 | head -20
-          # Makefile 加编译目标
-          grep -q "rk3568-kickpi-k1-linux" "$D/Makefile" || \
-            echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1-linux.dtb' >> "$D/Makefile"
-          tail -3 "$D/Makefile"
-          echo "=== 补充 Rockchip SDK 缺失的 dtsi（rk3568-linux.dtsi 等）==="
-          D2=kernel/arch/arm64/boot/dts/rockchip
-          # rk3568-linux.dtsi: SDK 通用 Linux 配置（6.18 主线无）—— 提供最小等价实现
-          if [ ! -f "$D2/rk3568-linux.dtsi" ]; then
-            printf '// SPDX-License-Identifier: (GPL-2.0+ OR MIT)\n/* 6.18 主线无此文件，提供最小等价实现 */\n/ {\n\tchosen {\n\t\tstdout-path = "serial2:1500000n8";\n\t};\n};\n' > "$D2/rk3568-linux.dtsi"
-            echo "  已生成 rk3568-linux.dtsi"
-          fi
-          echo "=== 补充缺失的 dt-bindings 头文件（不覆盖内核已有的）==="
-          if [ -d dts/inc/kernel-6.1/include/dt-bindings ]; then
-            for h in $(cd dts/inc/kernel-6.1/include && find dt-bindings -type f); do
-              dst="kernel/include/$h"
-              if [ -f "$dst" ]; then
-                echo "  已存在(跳过): $h"
-              else
-                mkdir -p "$(dirname "$dst")"
-                cp "dts/inc/kernel-6.1/include/$h" "$dst"
-                echo "  补充: $h"
-              fi
-            done
-          else
-            echo "  (无 dt-bindings 目录)"
-          fi
-
-      - name: 编译 K1 DTB
-        run: |
-          set -x
+          cp -v dts/rk3568-kickpi-k1.dts "$D/rk3568-kickpi-k1.dts"
+          grep -q "rk3568-kickpi-k1.dtb" "$D/Makefile" || \
+            echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1.dtb' >> "$D/Makefile"
           cd kernel
           make ARCH=arm64 defconfig 2>&1 | tail -2
-          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -40
-          echo "=== 产物 ==="
-          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1*.dtb 2>&1
+          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -30
+          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
 
-      - name: 收集产物
+      - name: 收集并校验
         if: always()
         run: |
           mkdir -p out
-          DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1-linux.dtb
+          DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
           if [ -f "$DTB" ]; then
             cp "$DTB" out/rk3568-kickpi-k1.dtb
-            ls -la out/
             sha256sum out/rk3568-kickpi-k1.dtb | tee out/SHA256SUMS
-            strings out/rk3568-kickpi-k1.dtb | grep -E "kickpi|rk3568" | head -6
+            ls -la out/
+            echo "=== 关键字符串 ==="
+            strings out/rk3568-kickpi-k1.dtb | grep -E "kickpi|rk3568|rgmii" | head -8
+            echo "=== DTB magic ==="
+            od -A x -t x1z -N 16 out/rk3568-kickpi-k1.dtb
           else
-            echo "!! DTB 未生成，重新跑获取完整报错"
-            cd kernel && make ARCH=arm64 dtbs 2>&1 | grep -E "Error|error|warning" | head -60
+            echo "!! 未生成"; cd kernel && make ARCH=arm64 dtbs 2>&1 | grep -E "Error|error" | head -40
           fi
-
-      - name: 上传产物
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k1-dtb-6.18
-          path: out/
 
       - name: 发布 Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: k1dtb2-${{ github.run_number }}
-          name: K1 DTB (6.18, official DTS) ${{ github.run_number }}
+          tag_name: k1dtb-ok-${{ github.run_number }}
+          name: K1 DTB 6.18 ${{ github.run_number }}
           files: out/*
+
+      - name: 上传产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k1-dtb
+          path: out/
