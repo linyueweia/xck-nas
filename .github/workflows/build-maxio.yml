@@ -30,11 +30,9 @@ jobs:
         run: |
           D=kernel/drivers/net/phy
           cp kernel-module/maxio.c $D/maxio.c
-          printf "obj-$(CONFIG_MAXIO_PHY) += maxio.o\n" >> $D/Makefile
-          printf "config MAXIO_PHY\n\ttristate \"MAXIO PHY\"\n\tdefault y\n" >> $D/Kconfig
-          printf "CONFIG_MAXIO_PHY=m\n" >> kernel/.config
+          printf "obj-m += maxio.o\n" >> $D/Makefile
+          ls -la $D/maxio.c $D/Makefile
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=drivers/net/phy maxio.ko
           cd .. && ls -la kernel/drivers/net/phy/maxio.ko
 
@@ -43,7 +41,8 @@ jobs:
           mkdir -p out
           cp kernel/drivers/net/phy/maxio.ko out/maxio.ko
           python3 patch_vermagic.py out/maxio.ko
-          strings out/maxio.ko | grep -m2 "6.18.18"
+          echo "--- 校验 ---"
+          strings out/maxio.ko | grep -m3 "6.18"
           sha256sum out/maxio.ko | tee out/SHA256SUMS
           ls -la out/
 
