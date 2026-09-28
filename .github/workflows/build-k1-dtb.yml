@@ -48,15 +48,7 @@ jobs:
           D2=kernel/arch/arm64/boot/dts/rockchip
           # rk3568-linux.dtsi: SDK 通用 Linux 配置（6.18 主线无）—— 提供最小等价实现
           if [ ! -f "$D2/rk3568-linux.dtsi" ]; then
-            cat > "$D2/rk3568-linux.dtsi" <<'DTSI'
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
-/* 最小等价实现：6.18 主线无此文件，K1 dts 需要它 */
-/ {
-	chosen {
-		stdout-path = "serial2:1500000n8";
-	};
-};
-DTSI
+            printf '// SPDX-License-Identifier: (GPL-2.0+ OR MIT)\n/* 6.18 主线无此文件，提供最小等价实现 */\n/ {\n\tchosen {\n\t\tstdout-path = "serial2:1500000n8";\n\t};\n};\n' > "$D2/rk3568-linux.dtsi"
             echo "  已生成 rk3568-linux.dtsi"
           fi
           echo "=== 补充缺失的 dt-bindings 头文件（不覆盖内核已有的）==="
