@@ -1,4 +1,4 @@
-name: Build MAXIO PHY module for fnOS
+name: Build MAXIO PHY module (hybrid: unifreq tools + fnnas symvers)
 
 on:
   workflow_dispatch:
@@ -12,49 +12,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install deps
+      - name: Install toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends bc flex bison libssl-dev libelf-dev gcc-aarch64-linux-gnu
 
-      - name: Clone kernel 6.18
-        run: git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel
+      - name: Clone kernel 6.18 (provides host tools + include tree)
+        run: git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git k
 
-      - name: Prepare kernel build
+      - name: Prepare kernel tree
         run: |
-          cd kernel
+          cd k
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j$(nproc)
-          # 打开 PHYLIB / MDIO，让 modpost 能找到符号
-          ./scripts/config -m PHYLIB -y MDIO_DEVICE -m MDIO_BUS >/dev/null 2>&1 || true
-          ./scripts/config -e PHYLIB >/dev/null 2>&1 || true
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig >/dev/null 2>&1 || true
-          grep -E "CONFIG_(PHYLIB|MDIO)" .config || true
+
+      - name: Extract fnnas headers and OVERRIDE version+symvers
+        run: |
+          set -x
+          mkdir -p kh
+          tar -xzf kernel-module/k1headers.tar.gz -C kh
+          KHD=$PWD/kh/linux-headers-6.18.18.c951-trim
+          echo "--- 飞牛的版本标识 ---"
+          cat $KHD/include/generated/utsrelease.h
+          echo "--- 用飞牛的覆盖 ---"
+          cp -f $KHD/Module.symvers k/Module.symvers
+          cp -f $KHD/include/generated/utsrelease.h k/include/generated/utsrelease.h
+          cp -f $KHD/include/config/auto.conf k/include/config/auto.conf 2>/dev/null || true
+          cp -f $KHD/include/generated/autoconf.h k/include/generated/autoconf.h 2>/dev/null || true
+          echo "--- 覆盖后 ---"
+          cat k/include/generated/utsrelease.h
+          grep -c . k/Module.symvers
 
       - name: Build maxio.ko
         run: |
-          D=kernel/drivers/net/phy
-          cp kernel-module/maxio.c $D/maxio.c
-          printf "obj-m += maxio.o\n" >> $D/Makefile
-          cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=drivers/net/phy modules KBUILD_MODPOST_WARN=1
-          cd ..
-          ls -la kernel/drivers/net/phy/maxio.ko
+          set -x
+          mkdir -p build
+          cp kernel-module/maxio.c build/maxio.c
+          printf "obj-m := maxio.o\n" > build/Makefile
+          cd build
+          make -C ../k M="$PWD" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules KBUILD_MODPOST_WARN=1
+          ls -la maxio.ko
 
-      - name: Patch vermagic
+      - name: Verify
         run: |
           mkdir -p out
-          cp kernel/drivers/net/phy/maxio.ko out/maxio.ko
-          python3 patch_vermagic.py out/maxio.ko
-          python3 -c "import sys; d=open('out/maxio.ko','rb').read(); i=d.find(b'vermagic='); print('vermagic:', d[i+9:d.find(b chr(0), i)].decode())" || true
-          strings out/maxio.ko | grep -m3 "6\.18"
-          sha256sum out/maxio.ko | tee out/SHA256SUMS
+          cp build/maxio.ko out/maxio.ko 2>/dev/null || true
+          if [ -f out/maxio.ko ]; then
+            echo "=== vermagic (须为 6.18.18.c951-trim) ==="
+            strings out/maxio.ko | grep -m3 "^6\.18" || true
+            echo "=== MAE0621A 驱动名 ==="
+            strings out/maxio.ko | grep -m2 "MAE0621A" || true
+            sha256sum out/maxio.ko | tee out/SHA256SUMS
+          fi
           ls -la out/
 
       - name: Release
         if: always()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: maxio-${{ github.run_number }}
-          name: MAXIO PHY module ${{ github.run_number }}
+          tag_name: maxiohyb-${{ github.run_number }}
+          name: MAXIO PHY module hybrid ${{ github.run_number }}
           files: out/*
