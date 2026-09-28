@@ -1,5 +1,7 @@
 /dts-v1/;
 
+/ {
+
 	interrupt-parent = <0x1>;
 	#address-cells = <0x2>;
 	#size-cells = <0x2>;
