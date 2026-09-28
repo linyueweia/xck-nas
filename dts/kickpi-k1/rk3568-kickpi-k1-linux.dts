@@ -1,0 +1,4 @@
+/dts-v1/;
+
+#include "rk3568-kickpi-k1.dtsi"
+#include "rk3568-linux.dtsi"
