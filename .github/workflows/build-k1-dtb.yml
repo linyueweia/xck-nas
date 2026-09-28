@@ -44,6 +44,21 @@ jobs:
           grep -q "rk3568-kickpi-k1-linux" "$D/Makefile" || \
             echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1-linux.dtb' >> "$D/Makefile"
           tail -3 "$D/Makefile"
+          echo "=== 补充缺失的 dt-bindings 头文件（不覆盖内核已有的）==="
+          if [ -d dts/inc/kernel-6.1/include/dt-bindings ]; then
+            for h in $(cd dts/inc/kernel-6.1/include && find dt-bindings -type f); do
+              dst="kernel/include/$h"
+              if [ -f "$dst" ]; then
+                echo "  已存在(跳过): $h"
+              else
+                mkdir -p "$(dirname "$dst")"
+                cp "dts/inc/kernel-6.1/include/$h" "$dst"
+                echo "  补充: $h"
+              fi
+            done
+          else
+            echo "  (无 dt-bindings 目录)"
+          fi
 
       - name: 编译 K1 DTB
         run: |
