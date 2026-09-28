@@ -44,6 +44,21 @@ jobs:
           grep -q "rk3568-kickpi-k1-linux" "$D/Makefile" || \
             echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1-linux.dtb' >> "$D/Makefile"
           tail -3 "$D/Makefile"
+          echo "=== 补充 Rockchip SDK 缺失的 dtsi（rk3568-linux.dtsi 等）==="
+          D2=kernel/arch/arm64/boot/dts/rockchip
+          # rk3568-linux.dtsi: SDK 通用 Linux 配置（6.18 主线无）—— 提供最小等价实现
+          if [ ! -f "$D2/rk3568-linux.dtsi" ]; then
+            cat > "$D2/rk3568-linux.dtsi" <<'DTSI'
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/* 最小等价实现：6.18 主线无此文件，K1 dts 需要它 */
+/ {
+	chosen {
+		stdout-path = "serial2:1500000n8";
+	};
+};
+DTSI
+            echo "  已生成 rk3568-linux.dtsi"
+          fi
           echo "=== 补充缺失的 dt-bindings 头文件（不覆盖内核已有的）==="
           if [ -d dts/inc/kernel-6.1/include/dt-bindings ]; then
             for h in $(cd dts/inc/kernel-6.1/include && find dt-bindings -type f); do
