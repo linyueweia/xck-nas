@@ -1,0 +1,83 @@
+name: Build MAXIO PHY module (for fnOS 6.18.18.c951-trim)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-maxio:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc flex bison libssl-dev libelf-dev
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: 克隆 6.18 内核
+        run: |
+          git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel 2>&1 | tail -3
+
+      - name: 准备内核构建环境
+        run: |
+          cd kernel
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig 2>&1 | tail -3
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j"$(nproc)" 2>&1 | tail -5
+
+      - name: 编译 maxio.ko
+        run: |
+          set -x
+          D=kernel/drivers/net/phy
+          cp kernel-module/maxio.c "$D/maxio.c"
+          echo 'obj-$(CONFIG_MAXIO_PHY) += maxio.o' >> "$D/Makefile"
+          # 强制把 CONFIG_MAXIO_PHY 打开
+          ( cd kernel && ./scripts/config --file .config -m MAXIO_PHY ) || true
+          grep -q MAXIO_PHY kernel/.config || echo 'CONFIG_MAXIO_PHY=m' >> kernel/.config
+          ( cd kernel && make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig 2>&1 | tail -2 )
+          ( cd kernel && make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=drivers/net/phy maxio.ko 2>&1 | tail -40 )
+          ls -la kernel/drivers/net/phy/maxio.ko
+
+      - name: 改写 vermagic 为飞牛内核值
+        run: |
+          set -x
+          mkdir -p out
+          K=kernel/drivers/net/phy/maxio.ko
+          ls -la $K
+          echo "=== 原始 vermagic ==="
+          modinfo -F vermagic $K 2>/dev/null || strings $K | grep -m1 vermagic
+          cp $K out/maxio.ko
+          python3 - <<'PY'
+import sys
+p = 'out/maxio.ko'
+d = bytearray(open(p,'rb').read())
+i = d.find(b'vermagic=')
+if i < 0: sys.exit('vermagic not found')
+j = d.find(b'\x00', i)
+orig = bytes(d[i+9:j]).decode()
+new = b'6.18.18.c951-trim SMP mod_unload aarch64\x00'
+print('原:', orig)
+print('新:', new[:-1].decode())
+# 用空格填充或截断到原长度
+if len(new) <= (j-i-9):
+    d[i+9:i+9+len(new)] = new
+else:
+    print('新值更长，改用覆盖法（保留长度）')
+    sys.exit('need padding strategy')
+open(p,'wb').write(d)
+PY
+          echo "=== 改写后 ==="
+          strings out/maxio.ko | grep -m1 "6.18.18"
+          sha256sum out/maxio.ko | tee out/SHA256SUMS
+          ls -la out/
+
+      - name: 发布
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: maxio-${{ github.run_number }}
+          name: MAXIO PHY module ${{ github.run_number }}
+          files: out/*
