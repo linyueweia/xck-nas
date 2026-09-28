@@ -1,0 +1,79 @@
+name: Build K1 DTB only (from linux-6.18.y)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'dts/rk3568-kickpi-k1.dts'
+      - 'build-dtb-k1.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  build-dtb-k1:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends device-tree-compiler bc flex bison libssl-dev
+
+      - name: 克隆 unifreq/linux-6.18.y 内核（飞牛同血统）
+        run: |
+          set -x
+          git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel 2>&1 | tail -3
+          ls kernel/arch/arm64/boot/dts/rockchip/ | grep -E "^rk3568" | head -5
+
+      - name: 编译 K1 DTB (make ARCH=arm64 dtbs)
+        run: |
+          set -x
+          DTS=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dts
+          cp -v dts/rk3568-kickpi-k1.dts "$DTS"
+          # 在 Makefile 加编译目标
+          MK=kernel/arch/arm64/boot/dts/rockchip/Makefile
+          grep -q "rk3568-kickpi-k1" "$MK" || \
+            echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1.dtb' >> "$MK"
+          tail -2 "$MK"
+          cd kernel
+          make ARCH=arm64 defconfig 2>&1 | tail -2
+          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -25
+          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
+
+      - name: 校验 DTB
+        run: |
+          set -x
+          DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
+          test -f "$DTB" || { echo "!! DTB 未生成"; cd kernel && make ARCH=arm64 dtbs 2>&1 | tail -60; exit 1; }
+          cp "$DTB" rk3568-kickpi-k1.dtb
+          sha256sum rk3568-kickpi-k1.dtb
+          echo "=== 节点数 ==="
+          dtc -I dtb -O dts rk3568-kickpi-k1.dtb -o /tmp/k1.dts 2>/dev/null
+          grep -cE "^	[a-zA-Z0-9@_,-]+ \{" /tmp/k1.dts
+          echo "=== 双网口 ==="
+          grep -c "ethernet@" /tmp/k1.dts
+          echo "=== model ==="
+          grep -E "^	model|^	compatible" /tmp/k1.dts | head -2
+          echo "=== gmac 配置 ==="
+          grep -A6 "ethernet@fe2a0000" /tmp/k1.dts | grep -E "phy-mode|reset-gpio|tx_delay|rx_delay" | head -6
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-kickpi-k1-dtb-6.18
+          path: |
+            rk3568-kickpi-k1.dtb
+          retention-days: 30
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: k1dtb-${{ github.run_number }}
+          name: K1 DTB (linux-6.18.y) ${{ github.run_number }}
+          files: rk3568-kickpi-k1.dtb
+          body: |
+            KICKPI K1 (RK3568) DTB —— 用 unifreq/linux-6.18.y（飞牛同血统）编译
+            方法：clone kernel → cp dts/rk3568-kickpi-k1.dts → make ARCH=arm64 dtbs
