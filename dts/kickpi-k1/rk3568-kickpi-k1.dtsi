@@ -1,0 +1,125 @@
+
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
+ *
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+#include <dt-bindings/display/rockchip_vop.h>
+#include "rk3568.dtsi"
+#include "rk3568-kickpi-evb.dtsi"
+
+// LCD
+#include "rk3568-kickpi-lcd-hdmi.dtsi"
+//#include "rk3568-kickpi-lcd-edp-15.6-1920-1080.dtsi"
+//#include "rk3568-kickpi-lcd-mipi0-10.1-800-1280.dtsi"
+//#include "rk3568-kickpi-lcd-mipi1-10.1-800-1280.dtsi"
+//#include "rk3568-kickpi-lcd-mipi0-10.1-800-1280-v2.dtsi"
+//#include "rk3568-kickpi-lcd-mipi1-10.1-800-1280-v2.dtsi"
+//#include "rk3568-kickpi-lcd-lvds0-7-1024-600.dtsi"
+//#include "rk3568-kickpi-lcd-lvds1-7-1024-600.dtsi"
+//#include "rk3568-kickpi-lcd-mipi0-5-720-1280.dtsi"
+//#include "rk3568-kickpi-lcd-mipi1-5-720-1280.dtsi"
+// #include "rk3568-kickpi-lcd-mipi0-8-800-1280.dtsi"
+// #include "rk3568-kickpi-lcd-mipi1-8-800-1280.dtsi"
+ 
+
+ 
+// Triple LCD
+//#include "rk3568-kickpi-triple-lcd-hdmi-mipi1-lvds.dtsi"
+//#include "rk3568-kickpi-triple-lcd-edp-mipi1-lvds.dtsi"
+// #include "rk3568-kickpi-dual-lcd-mipi0-mipi1.dtsi"
+
+// Network
+#include "rk3568-kickpi-eth-gmac0.dtsi"
+#include "rk3568-kickpi-eth-gmac1.dtsi"
+#include "rk3568-kickpi-wifibt.dtsi"
+
+// Camera
+#include "rk3568-kickpi-mipi-camera-gc5035.dtsi"
+
+// Other
+#include "rk3568-kickpi-usb.dtsi"
+#include "rk3568-kickpi-ir.dtsi"
+#include "rk3568-kickpi-sata.dtsi"
+#include "rk3568-kickpi-pcie.dtsi"
+#include "rk3568-kickpi-extend-40pin.dtsi"
+
+
+/ {
+	model = "Rockchip RK3568 KICKPI K1 Board";
+	compatible = "rockchip,rk3568-kickpi-k1", "rockchip,rk3568";
+
+	vcc2v5_sys: vcc2v5-ddr {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc2v5-sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <2500000>;
+		regulator-max-microvolt = <2500000>;
+		vin-supply = <&vcc3v3_sys>;
+	};
+
+	vcc3v3_bu: vcc3v3-bu {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_bu";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+/*
+	fan0: gpio-fan {
+		#cooling-cells = <2>;
+		compatible = "gpio-fan";
+		gpio-fan,speed-map = <0 0 
+								3000 1>;
+		gpios = <&gpio0 RK_PD6 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+	*/
+};
+
+&leds {
+    fan {
+        gpios = <&gpio0 RK_PD6 GPIO_ACTIVE_HIGH>;
+        default-state = "on";
+    };
+};
+
+&rk809_sound {
+	spk-det-gpio = <&gpio4 RK_PC6 GPIO_ACTIVE_LOW>;
+	hp-det-gpio = <&gpio1 RK_PD3 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&hp_det>;
+	hp-volume = <20>;
+	spk-volume = <30>;
+};
+
+&i2c5 {
+	status = "okay";
+
+	hym8563: hym8563@51 {
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+		clock-output-names = "hym8563";
+		// IRQ GPIO IS MODIFYED FOR UPDATE HYM8562 DRIVER 
+		rtc-irq-gpio = <&gpio0 RK_PD3 IRQ_TYPE_EDGE_FALLING>;
+	};
+	
+};
+
+&pinctrl {
+	headphone {
+		hp_det: hp-det {
+			rockchip,pins = <1 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
