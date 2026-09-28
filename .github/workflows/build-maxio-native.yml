@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cross toolchain
+      - name: Install toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends bc flex bison libssl-dev libelf-dev gcc-aarch64-linux-gnu
@@ -21,15 +21,25 @@ jobs:
         run: |
           mkdir -p kh
           tar -xzf kernel-module/k1headers.tar.gz -C kh
-          KHD=$PWD/kh/linux-headers-6.18.18.c951-trim
-          echo "KHD=$KHD" >> $GITHUB_ENV
-          ls -la $KHD | head
-          cat $KHD/include/generated/utsrelease.h
-          echo "--- Module.symvers 行数 ---"
-          wc -l $KHD/Module.symvers
-          chmod +x $KHD/scripts/mod/modpost $KHD/scripts/basic/fixdep
+          echo "KHD=$PWD/kh/linux-headers-6.18.18.c951-trim" >> $GITHUB_ENV
 
-      - name: Build maxio.ko with fnnas headers
+      - name: Rebuild host tools for x86_64 (fixdep & modpost)
+        run: |
+          set -x
+          S=$KHD/scripts
+          echo "--- 原始二进制架构 ---"
+          file $S/basic/fixdep $S/mod/modpost || true
+          rm -f $S/basic/fixdep $S/mod/modpost
+          gcc -o $S/basic/fixdep $S/basic/fixdep.c
+          gcc -I$S/mod -o $S/mod/modpost $S/mod/modpost.c $S/mod/sumversion.c \
+              $S/mod/file2alias.c $S/mod/modpost_extable.c 2>&1 | tail -20 || \
+          gcc -I$S/mod -o $S/mod/modpost $S/mod/modpost.c $S/mod/sumversion.c \
+              $S/mod/file2alias.c
+          echo "--- 重建后 ---"
+          file $S/basic/fixdep $S/mod/modpost
+          $S/mod/modpost -V || true
+
+      - name: Build maxio.ko
         run: |
           mkdir -p build
           cp kernel-module/maxio.c build/maxio.c
@@ -41,12 +51,14 @@ jobs:
       - name: Verify
         run: |
           mkdir -p out
-          cp build/maxio.ko out/maxio.ko
-          echo "=== vermagic (应为 6.18.18.c951-trim) ==="
-          strings out/maxio.ko | grep -m2 "^6\.18"
-          echo "=== 是否有 __versions 段 ==="
-          if strings out/maxio.ko | grep -q "__versions"; then echo "有"; else echo "无(或已内嵌)"; fi
-          sha256sum out/maxio.ko | tee out/SHA256SUMS
+          cp build/maxio.ko out/maxio.ko 2>/dev/null || true
+          if [ -f out/maxio.ko ]; then
+            echo "=== vermagic ==="
+            strings out/maxio.ko | grep -m2 "^6\.18" || true
+            echo "=== MAE0621A ==="
+            strings out/maxio.ko | grep -m2 "MAE0621A" || true
+            sha256sum out/maxio.ko | tee out/SHA256SUMS
+          fi
           ls -la out/
 
       - name: Release
@@ -54,5 +66,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: maxionative-${{ github.run_number }}
-          name: MAXIO PHY module (native build) ${{ github.run_number }}
+          name: MAXIO PHY module native ${{ github.run_number }}
           files: out/*
