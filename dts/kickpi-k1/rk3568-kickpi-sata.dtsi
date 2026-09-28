@@ -1,0 +1,11 @@
+
+// Multi-PHY0 to SATA0
+&combphy0_us {
+	//rockchip,dis-u3otg0-port; 
+	status = "okay";
+};
+
+&sata0 {
+	status = "okay";
+};
+
