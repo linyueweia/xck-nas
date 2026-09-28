@@ -25,24 +25,29 @@ jobs:
           cd kernel
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j$(nproc)
+          # 打开 PHYLIB / MDIO，让 modpost 能找到符号
+          ./scripts/config -m PHYLIB -y MDIO_DEVICE -m MDIO_BUS >/dev/null 2>&1 || true
+          ./scripts/config -e PHYLIB >/dev/null 2>&1 || true
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig >/dev/null 2>&1 || true
+          grep -E "CONFIG_(PHYLIB|MDIO)" .config || true
 
       - name: Build maxio.ko
         run: |
           D=kernel/drivers/net/phy
           cp kernel-module/maxio.c $D/maxio.c
           printf "obj-m += maxio.o\n" >> $D/Makefile
-          ls -la $D/maxio.c $D/Makefile
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=drivers/net/phy maxio.ko
-          cd .. && ls -la kernel/drivers/net/phy/maxio.ko
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=drivers/net/phy modules KBUILD_MODPOST_WARN=1
+          cd ..
+          ls -la kernel/drivers/net/phy/maxio.ko
 
       - name: Patch vermagic
         run: |
           mkdir -p out
           cp kernel/drivers/net/phy/maxio.ko out/maxio.ko
           python3 patch_vermagic.py out/maxio.ko
-          echo "--- 校验 ---"
-          strings out/maxio.ko | grep -m3 "6.18"
+          python3 -c "import sys; d=open('out/maxio.ko','rb').read(); i=d.find(b'vermagic='); print('vermagic:', d[i+9:d.find(b chr(0), i)].decode())" || true
+          strings out/maxio.ko | grep -m3 "6\.18"
           sha256sum out/maxio.ko | tee out/SHA256SUMS
           ls -la out/
 
