@@ -22,8 +22,9 @@ jobs:
         run: |
           set -x
           git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel 2>&1 | tail -3
+          ls kernel/arch/arm64/boot/dts/rockchip/rk3568.dtsi
 
-      - name: 编译 K1 DTB（展开式 DTS，自包含，不依赖内核 label）
+      - name: 编译 K1 DTB（j3ffs 主线 DTS）
         run: |
           set -x
           D=kernel/arch/arm64/boot/dts/rockchip
@@ -32,37 +33,30 @@ jobs:
             echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1.dtb' >> "$D/Makefile"
           cd kernel
           make ARCH=arm64 defconfig 2>&1 | tail -2
-          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -30
-          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
+          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -40
+          echo "=== 产物 ==="
+          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb 2>&1
 
-      - name: 收集并校验
+      - name: 收集校验
         if: always()
         run: |
           mkdir -p out
           DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
           if [ -f "$DTB" ]; then
             cp "$DTB" out/rk3568-kickpi-k1.dtb
-            sha256sum out/rk3568-kickpi-k1.dtb | tee out/SHA256SUMS
             ls -la out/
-            echo "=== 关键字符串 ==="
-            strings out/rk3568-kickpi-k1.dtb | grep -E "kickpi|rk3568|rgmii" | head -8
-            echo "=== DTB magic ==="
-            od -A x -t x1z -N 16 out/rk3568-kickpi-k1.dtb
+            sha256sum out/rk3568-kickpi-k1.dtb | tee out/SHA256SUMS
+            echo "=== 网口相关字符串 ==="
+            strings out/rk3568-kickpi-k1.dtb | grep -E "kickpi|rgmii|gmac" | head -8
           else
-            echo "!! 未生成"; cd kernel && make ARCH=arm64 dtbs 2>&1 | grep -E "Error|error" | head -40
+            echo "!! 未生成，完整报错："
+            cd kernel && make ARCH=arm64 dtbs 2>&1 | grep -E "Error|error|fatal" | head -40
           fi
 
       - name: 发布 Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: k1dtb-ok-${{ github.run_number }}
-          name: K1 DTB 6.18 ${{ github.run_number }}
+          tag_name: k1j3-${{ github.run_number }}
+          name: K1 DTB (j3ffs mainline 6.18) ${{ github.run_number }}
           files: out/*
-
-      - name: 上传产物
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k1-dtb
-          path: out/
