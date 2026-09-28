@@ -843,7 +843,8 @@
 		snps,tso;
 		status = "okay";
 		assigned-clocks = <0x12 0x189 0x12 0x186>;
-		assigned-clock-parents = <0x12 0x187 0x55>;
+		assigned-clock-parents = <0x12 0x187 0x12 0xc5>;
+		assigned-clock-rates = <0x0 0x7735940>;
 		clock_in_out = "output";
 		phy-handle = <0x56>;
 		phy-mode = "rgmii-id";
@@ -3052,7 +3053,8 @@
 		phy-mode = "rgmii-id";
 		phy-supply = <0x20>;
 		assigned-clocks = <0x12 0x182 0x12 0x185>;
-		assigned-clock-parents = <0x12 0x183 0x55>;
+		assigned-clock-parents = <0x12 0x183 0x12 0xb6>;
+		assigned-clock-rates = <0x0 0x7735940>;
 		snps,reset-gpio = <0xd6 0x1b 0x1>;
 		snps,reset-active-low;
 		snps,reset-delays-us = <0x0 0x4e20 0x186a0>;
