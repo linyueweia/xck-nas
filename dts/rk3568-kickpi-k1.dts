@@ -826,80 +826,64 @@
 		vmmc-supply = <0x29>;
 		vqmmc-supply = <0x1e>;
 	};
-	ethernet@fe010000 {
+		ethernet@fe010000 {
 		compatible = "rockchip,rk3568-gmac", "snps,dwmac-4.20a";
 		reg = <0x0 0xfe010000 0x0 0x10000>;
 		interrupts = <0x0 0x20 0x4 0x0 0x1d 0x4>;
 		interrupt-names = "macirq", "eth_wake_irq";
+		rockchip,grf = <0x23>;
 		clocks = <0x12 0x186 0x12 0x189 0x12 0x189 0x12 0xc7 0x12 0xc3 0x12 0xc4 0x12 0x189 0x12 0xc8 0x12 0xac 0x12 0xab>;
 		clock-names = "stmmaceth", "mac_clk_rx", "mac_clk_tx", "clk_mac_refout", "aclk_mac", "pclk_mac", "clk_mac_speed", "ptp_ref", "pclk_xpcs", "clk_xpcs_eee";
 		resets = <0x12 0xec>;
 		reset-names = "stmmaceth";
-		rockchip,grf = <0x23>;
-		snps,axi-config = <0x52>;
 		snps,mixed-burst;
-		snps,mtl-rx-config = <0x53>;
-		snps,mtl-tx-config = <0x54>;
 		snps,tso;
+		snps,axi-config = <0x320>;
+		snps,mtl-rx-config = <0x321>;
+		snps,mtl-tx-config = <0x322>;
 		status = "okay";
-		assigned-clocks = <0x12 0x189 0x12 0x186>;
-		assigned-clock-parents = <0x12 0x187 0x12 0xc5>;
-		assigned-clock-rates = <0x0 0x7735940>;
+		phy-mode = "rgmii";
 		clock_in_out = "output";
-		phy-handle = <0x56>;
-		phy-mode = "rgmii-id";
-		phy-supply = <0x20>;
 		snps,reset-gpio = <0x5e 0x7 0x1>;
 		snps,reset-active-low;
 		snps,reset-delays-us = <0x0 0x4e20 0x186a0>;
+		assigned-clocks = <0x12 0x189 0x12 0x186>;
+		assigned-clock-parents = <0x12 0x187 0x12 0xc5>;
+		assigned-clock-rates = <0x0 0x7735940>;
 		pinctrl-names = "default";
-		pinctrl-0 = <0x57 0x58 0x59 0x5a 0x5b 0x5c>;
+		pinctrl-0 = <0x57 0x58 0x59 0x5a 0x5c>;
+		tx_delay = <0x2f>;
+		rx_delay = <0x39>;
+		phy-handle = <0x330>;
 		mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
-			ethernet-phy@0 {
+			phy@0 {
 				compatible = "ethernet-phy-ieee802.3-c22";
-				reg = <0x1>;
-				phandle = <0x56>;
-				leds {
-					#address-cells = <0x1>;
-					#size-cells = <0x0>;
-					led@1 {
-						reg = <0x1>;
-						color = <0x4>;
-						function = "lan";
-						default-state = "keep";
-					};
-					led@2 {
-						reg = <0x2>;
-						color = <0x2>;
-						function = "lan";
-						default-state = "keep";
-					};
-				};
+				reg = <0x0>;
+				phandle = <0x330>;
 			};
 		};
 		stmmac-axi-config {
 			snps,blen = <0x0 0x0 0x0 0x0 0x10 0x8 0x4>;
 			snps,rd_osr_lmt = <0x8>;
 			snps,wr_osr_lmt = <0x4>;
-			phandle = <0x52>;
+			phandle = <0x320>;
 		};
 		rx-queues-config {
 			snps,rx-queues-to-use = <0x1>;
-			phandle = <0x53>;
+			phandle = <0x321>;
 			queue0 {
 			};
 		};
 		tx-queues-config {
 			snps,tx-queues-to-use = <0x1>;
-			phandle = <0x54>;
+			phandle = <0x322>;
 			queue0 {
 			};
 		};
-	};
-	vop@fe040000 {
+	};	vop@fe040000 {
 		reg = <0x0 0xfe040000 0x0 0x3000 0x0 0xfe044000 0x0 0x1000>;
 		reg-names = "vop", "gamma-lut";
 		interrupts = <0x0 0x94 0x4>;
@@ -3033,39 +3017,40 @@
 			phandle = <0xd4>;
 		};
 	};
-	ethernet@fe2a0000 {
+		ethernet@fe2a0000 {
 		compatible = "rockchip,rk3568-gmac", "snps,dwmac-4.20a";
 		reg = <0x0 0xfe2a0000 0x0 0x10000>;
 		interrupts = <0x0 0x1b 0x4 0x0 0x18 0x4>;
 		interrupt-names = "macirq", "eth_wake_irq";
-		clocks = <0x12 0x182 0x12 0x185 0x12 0x185 0x12 0xb8 0x12 0xb4 0x12 0xb5 0x12 0x185 0x12 0xb9 0x12 0xac>;
-		clock-names = "stmmaceth", "mac_clk_rx", "mac_clk_tx", "clk_mac_refout", "aclk_mac", "pclk_mac", "clk_mac_speed", "ptp_ref", "pclk_xpcs";
+		rockchip,grf = <0x23>;
+		clocks = <0x12 0x182 0x12 0x185 0x12 0x185 0x12 0xb8 0x12 0xb4 0x12 0xb5 0x12 0x185 0x12 0xb9 0x12 0xac 0x12 0xab>;
+		clock-names = "stmmaceth", "mac_clk_rx", "mac_clk_tx", "clk_mac_refout", "aclk_mac", "pclk_mac", "clk_mac_speed", "ptp_ref", "pclk_xpcs", "clk_xpcs_eee";
 		resets = <0x12 0xd7>;
 		reset-names = "stmmaceth";
-		rockchip,grf = <0x23>;
-		snps,axi-config = <0xd7>;
 		snps,mixed-burst;
-		snps,mtl-rx-config = <0xd8>;
-		snps,mtl-tx-config = <0xd9>;
 		snps,tso;
+		snps,axi-config = <0x310>;
+		snps,mtl-rx-config = <0x311>;
+		snps,mtl-tx-config = <0x312>;
 		status = "okay";
+		phy-mode = "rgmii";
 		clock_in_out = "output";
-		phy-mode = "rgmii-id";
-		phy-supply = <0x20>;
-		assigned-clocks = <0x12 0x182 0x12 0x185>;
-		assigned-clock-parents = <0x12 0x183 0x12 0xb6>;
-		assigned-clock-rates = <0x0 0x7735940>;
 		snps,reset-gpio = <0xd6 0x1b 0x1>;
 		snps,reset-active-low;
 		snps,reset-delays-us = <0x0 0x4e20 0x186a0>;
-		phy-handle = <0x300>;
+		assigned-clocks = <0x12 0x185 0x12 0x182>;
+		assigned-clock-parents = <0x12 0x183 0x12 0xb6>;
+		assigned-clock-rates = <0x0 0x7735940>;
 		pinctrl-names = "default";
-		pinctrl-0 = <0x301 0x302 0x303 0x304 0x305 0x306>;
+		pinctrl-0 = <0x301 0x302 0x303 0x304 0x306>;
+		tx_delay = <0x21>;
+		rx_delay = <0x3c>;
+		phy-handle = <0x300>;
 		mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <0x1>;
 			#size-cells = <0x0>;
-			ethernet-phy@0 {
+			phy@0 {
 				compatible = "ethernet-phy-ieee802.3-c22";
 				reg = <0x0>;
 				phandle = <0x300>;
@@ -3075,22 +3060,21 @@
 			snps,blen = <0x0 0x0 0x0 0x0 0x10 0x8 0x4>;
 			snps,rd_osr_lmt = <0x8>;
 			snps,wr_osr_lmt = <0x4>;
-			phandle = <0xd7>;
+			phandle = <0x310>;
 		};
 		rx-queues-config {
 			snps,rx-queues-to-use = <0x1>;
-			phandle = <0xd8>;
+			phandle = <0x311>;
 			queue0 {
 			};
 		};
 		tx-queues-config {
 			snps,tx-queues-to-use = <0x1>;
-			phandle = <0xd9>;
+			phandle = <0x312>;
 			queue0 {
 			};
 		};
-	};
-	can@fe570000 {
+	};	can@fe570000 {
 		compatible = "rockchip,rk3568v2-canfd";
 		reg = <0x0 0xfe570000 0x0 0x1000>;
 		interrupts = <0x0 0x1 0x4>;
