@@ -43,22 +43,22 @@ jobs:
           make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -25
           ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
 
-      - name: 校验 DTB
+      - name: 校验 DTB（不用 dtc，避免 ubuntu dtc segfault）
         run: |
           set -x
           DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
           test -f "$DTB" || { echo "!! DTB 未生成"; cd kernel && make ARCH=arm64 dtbs 2>&1 | tail -60; exit 1; }
           cp "$DTB" rk3568-kickpi-k1.dtb
+          ls -la rk3568-kickpi-k1.dtb
           sha256sum rk3568-kickpi-k1.dtb
-          echo "=== 节点数 ==="
-          dtc -I dtb -O dts rk3568-kickpi-k1.dtb -o /tmp/k1.dts 2>/dev/null
-          grep -cE "^	[a-zA-Z0-9@_,-]+ \{" /tmp/k1.dts
-          echo "=== 双网口 ==="
-          grep -c "ethernet@" /tmp/k1.dts
-          echo "=== model ==="
-          grep -E "^	model|^	compatible" /tmp/k1.dts | head -2
-          echo "=== gmac 配置 ==="
-          grep -A6 "ethernet@fe2a0000" /tmp/k1.dts | grep -E "phy-mode|reset-gpio|tx_delay|rx_delay" | head -6
+          echo "=== DTB magic ==="
+          xxd -l 16 rk3568-kickpi-k1.dtb || od -A x -t x1z -v -N 16 rk3568-kickpi-k1.dtb
+          echo "=== 关键字符串（strings 代替 dtc）==="
+          strings rk3568-kickpi-k1.dtb | grep -E "kickpi|rockchip,rk3568" | head -8
+          echo "=== 网口相关字符串 ==="
+          strings rk3568-kickpi-k1.dtb | grep -E "rgmii|gmac" | head -6
+          echo "=== 与飞牛 R5S 骨架对比大小 ==="
+          ls -la rk3568-kickpi-k1.dtb
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
