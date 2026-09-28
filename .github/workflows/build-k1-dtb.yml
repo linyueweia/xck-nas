@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'dts/rk3568-kickpi-k1.dts'
-      - 'build-dtb-k1.sh'
+      - 'dts/kickpi-k1/**'
+      - '.github/workflows/build-k1-dtb.yml'
 
 permissions:
   contents: write
@@ -22,58 +22,64 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends device-tree-compiler bc flex bison libssl-dev
 
-      - name: 克隆 unifreq/linux-6.18.y 内核（飞牛同血统）
+      - name: 克隆 unifreq/linux-6.18.y 内核
         run: |
           set -x
           git clone --depth 1 -b main https://github.com/unifreq/linux-6.18.y.git kernel 2>&1 | tail -3
           ls kernel/arch/arm64/boot/dts/rockchip/ | grep -E "^rk3568" | head -5
 
-      - name: 编译 K1 DTB (make ARCH=arm64 dtbs)
+      - name: 放入 K1 官方 DTS/DTSI（用 6.18 内核的 rk3568.dtsi）
         run: |
           set -x
-          DTS=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dts
-          cp -v dts/rk3568-kickpi-k1.dts "$DTS"
-          # 在 Makefile 加编译目标
-          MK=kernel/arch/arm64/boot/dts/rockchip/Makefile
-          grep -q "rk3568-kickpi-k1" "$MK" || \
-            echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1.dtb' >> "$MK"
-          tail -2 "$MK"
+          D=kernel/arch/arm64/boot/dts/rockchip
+          echo "=== 仓库里的 K1 dts ==="
+          ls -la dts/kickpi-k1/ 2>/dev/null || echo "(没有 dts/kickpi-k1 目录)"
+          # 只复制 K1 特有的（不覆盖内核的 rk3568.dtsi / rk356x.dtsi / rk3568-pinctrl.dtsi / rockchip-pinconf.dtsi）
+          for f in dts/kickpi-k1/*.dts dts/kickpi-k1/rk3568-kickpi-*.dtsi; do
+            [ -f "$f" ] && cp -v "$f" "$D/" || true
+          done
+          echo "=== 放入后（K1 相关）==="
+          ls -la "$D"/rk3568-kickpi-* 2>&1 | head -20
+          # Makefile 加编译目标
+          grep -q "rk3568-kickpi-k1-linux" "$D/Makefile" || \
+            echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-kickpi-k1-linux.dtb' >> "$D/Makefile"
+          tail -3 "$D/Makefile"
+
+      - name: 编译 K1 DTB
+        run: |
+          set -x
           cd kernel
           make ARCH=arm64 defconfig 2>&1 | tail -2
-          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -25
-          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
+          make ARCH=arm64 dtbs -j"$(nproc)" 2>&1 | tail -40
+          echo "=== 产物 ==="
+          ls -la arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1*.dtb 2>&1
 
-      - name: 校验 DTB（不用 dtc，避免 ubuntu dtc segfault）
+      - name: 收集产物
+        if: always()
         run: |
-          set -x
-          DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb
-          test -f "$DTB" || { echo "!! DTB 未生成"; cd kernel && make ARCH=arm64 dtbs 2>&1 | tail -60; exit 1; }
-          cp "$DTB" rk3568-kickpi-k1.dtb
-          ls -la rk3568-kickpi-k1.dtb
-          sha256sum rk3568-kickpi-k1.dtb
-          echo "=== DTB magic ==="
-          xxd -l 16 rk3568-kickpi-k1.dtb || od -A x -t x1z -v -N 16 rk3568-kickpi-k1.dtb
-          echo "=== 关键字符串（strings 代替 dtc）==="
-          strings rk3568-kickpi-k1.dtb | grep -E "kickpi|rockchip,rk3568" | head -8
-          echo "=== 网口相关字符串 ==="
-          strings rk3568-kickpi-k1.dtb | grep -E "rgmii|gmac" | head -6
-          echo "=== 与飞牛 R5S 骨架对比大小 ==="
-          ls -la rk3568-kickpi-k1.dtb
+          mkdir -p out
+          DTB=kernel/arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1-linux.dtb
+          if [ -f "$DTB" ]; then
+            cp "$DTB" out/rk3568-kickpi-k1.dtb
+            ls -la out/
+            sha256sum out/rk3568-kickpi-k1.dtb | tee out/SHA256SUMS
+            strings out/rk3568-kickpi-k1.dtb | grep -E "kickpi|rk3568" | head -6
+          else
+            echo "!! DTB 未生成，重新跑获取完整报错"
+            cd kernel && make ARCH=arm64 dtbs 2>&1 | grep -E "Error|error|warning" | head -60
+          fi
 
       - name: 上传产物
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rk3568-kickpi-k1-dtb-6.18
-          path: |
-            rk3568-kickpi-k1.dtb
-          retention-days: 30
+          name: k1-dtb-6.18
+          path: out/
 
       - name: 发布 Release
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: k1dtb-${{ github.run_number }}
-          name: K1 DTB (linux-6.18.y) ${{ github.run_number }}
-          files: rk3568-kickpi-k1.dtb
-          body: |
-            KICKPI K1 (RK3568) DTB —— 用 unifreq/linux-6.18.y（飞牛同血统）编译
-            方法：clone kernel → cp dts/rk3568-kickpi-k1.dts → make ARCH=arm64 dtbs
+          tag_name: k1dtb2-${{ github.run_number }}
+          name: K1 DTB (6.18, official DTS) ${{ github.run_number }}
+          files: out/*
