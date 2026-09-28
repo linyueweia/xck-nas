@@ -17,11 +17,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends device-tree-compiler
 
-      - name: 编译（骨架是自包含展开式，不需要内核源码）
+      - name: 编译（自包含展开式 DTS，不需要内核源码）
         run: |
           set -x
-          dtc -I dts -O dtb -o out/rk3568-kickpi-k1.dtb dts/rk3568-kickpi-k1.dts 2>&1 | tail -30 || {
-            mkdir -p out; dtc -I dts -O dtb -o out/rk3568-kickpi-k1.dtb dts/rk3568-kickpi-k1.dts; }
+          mkdir -p out
+          dtc -I dts -O dtb -o out/rk3568-kickpi-k1.dtb dts/rk3568-kickpi-k1.dts
           ls -la out/
 
       - name: 验证产物
@@ -29,12 +29,13 @@ jobs:
           D=out/rk3568-kickpi-k1.dtb
           ls -la $D
           sha256sum $D | tee out/SHA256SUMS
-          echo "=== clock-names 检查（应含 pclk_xpcs）==="
-          strings $D | grep -o "stmmaceth.mac_clk_rx[^\x00]*" | head -3
+          echo "=== clock-names（必须含 pclk_xpcs）==="
+          strings $D | grep -o "stmmaceth.mac_clk_rx[^\\x00]*" | head -3
           echo "=== model ==="
-          strings $D | grep -i kickpi | head -3
-          echo "=== 反编译校验 ==="
-          dtc -I dtb -O dts $D -o /tmp/check.dts && grep -c "ethernet@fe" /tmp/check.dts
+          strings $D | grep -iE "kickpi|rk3568-kickpi" | head -3
+          echo "=== 反编译确认 gmac 节点 ==="
+          dtc -I dtb -O dts $D -o /tmp/check.dts
+          grep -A2 "ethernet@fe" /tmp/check.dts | grep -E "clock-names|clock_in_out|phy-mode" | head -12
 
       - name: 发布
         if: success()
