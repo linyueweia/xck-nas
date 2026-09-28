@@ -1,4 +1,4 @@
-name: Build MAXIO PHY module (hybrid: unifreq tools + fnnas symvers)
+name: Build MAXIO PHY module hybrid
 
 on:
   workflow_dispatch:
