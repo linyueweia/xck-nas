@@ -844,10 +844,13 @@
 		status = "okay";
 		assigned-clocks = <0x12 0x189 0x12 0x186>;
 		assigned-clock-parents = <0x12 0x187 0x55>;
-		clock_in_out = "input";
+		clock_in_out = "output";
 		phy-handle = <0x56>;
 		phy-mode = "rgmii-id";
 		phy-supply = <0x20>;
+		snps,reset-gpio = <0x5e 0x7 0x1>;
+		snps,reset-active-low;
+		snps,reset-delays-us = <0x0 0x4e20 0x186a0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <0x57 0x58 0x59 0x5a 0x5b 0x5c>;
 		mdio {
@@ -857,11 +860,6 @@
 			ethernet-phy@0 {
 				compatible = "ethernet-phy-ieee802.3-c22";
 				reg = <0x0>;
-				pinctrl-names = "default";
-				pinctrl-0 = <0x5d>;
-				reset-assert-us = <0x4e20>;
-				reset-deassert-us = <0x186a0>;
-				reset-gpios = <0x5e 0x7 0x1>;
 				phandle = <0x56>;
 				leds {
 					#address-cells = <0x1>;
@@ -3050,11 +3048,14 @@
 		snps,mtl-tx-config = <0xd9>;
 		snps,tso;
 		status = "okay";
-		clock_in_out = "input";
+		clock_in_out = "output";
 		phy-mode = "rgmii-id";
 		phy-supply = <0x20>;
 		assigned-clocks = <0x12 0x182 0x12 0x185>;
 		assigned-clock-parents = <0x12 0x183 0x55>;
+		snps,reset-gpio = <0xd6 0x1b 0x1>;
+		snps,reset-active-low;
+		snps,reset-delays-us = <0x0 0x4e20 0x186a0>;
 		phy-handle = <0x300>;
 		pinctrl-names = "default";
 		pinctrl-0 = <0x301 0x302 0x303 0x304 0x305 0x306>;
@@ -3065,11 +3066,6 @@
 			ethernet-phy@0 {
 				compatible = "ethernet-phy-ieee802.3-c22";
 				reg = <0x0>;
-				pinctrl-names = "default";
-				pinctrl-0 = <0x307>;
-				reset-assert-us = <0x4e20>;
-				reset-deassert-us = <0x186a0>;
-				reset-gpios = <0xd6 0x1b 0x1>;
 				phandle = <0x300>;
 			};
 		};
