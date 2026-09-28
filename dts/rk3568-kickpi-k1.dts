@@ -859,7 +859,7 @@
 			#size-cells = <0x0>;
 			ethernet-phy@0 {
 				compatible = "ethernet-phy-ieee802.3-c22";
-				reg = <0x0>;
+				reg = <0x1>;
 				phandle = <0x56>;
 				leds {
 					#address-cells = <0x1>;
