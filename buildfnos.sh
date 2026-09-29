@@ -125,6 +125,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ---------- 写入引导层（分区之外：idbloader + u-boot）----------
+# 依据 K1 原厂布局：idbloader.img @扇区64，u-boot.itb @扇区16384
+# 必须在本步骤之前写入镜像文件本体（losetup 之前）
+if [[ -f "$UBOOT_PATH/idbloader.img" ]]; then
+  echo "✏️ 写入引导层 idbloader.img -> 扇区 64 (@0x8000)"
+  sudo dd if="$UBOOT_PATH/idbloader.img" of="$MODIFIED_IMG" bs=512 seek=64 conv=notrunc status=none \
+    || { echo "❌ 写入 idbloader.img 失败"; exit 1; }
+else
+  echo "ℹ️ 无 idbloader.img，跳过（沿用基镜像自带）"
+fi
+
+if [[ -f "$UBOOT_PATH/u-boot.itb" ]]; then
+  echo "✏️ 写入引导层 u-boot.itb -> 扇区 16384 (@0x800000)"
+  sudo dd if="$UBOOT_PATH/u-boot.itb" of="$MODIFIED_IMG" bs=512 seek=16384 conv=notrunc status=none \
+    || { echo "❌ 写入 u-boot.itb 失败"; exit 1; }
+else
+  echo "ℹ️ 无 u-boot.itb，跳过"
+fi
+sync
+
 LOOP_DEVICE=$(sudo losetup -fP --show "$MODIFIED_IMG") || { echo "❌ losetup 失败"; exit 1; }
 echo "🔗 Loop 设备: $LOOP_DEVICE"
 
