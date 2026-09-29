@@ -65,6 +65,20 @@ jobs:
           mkdir -p /tmp/bm /tmp/rm
           sudo mount -o loop,ro "${LOOP}p1" /tmp/bm
           sudo mount -o loop,ro "${LOOP}p2" /tmp/rm
+          echo "================ 引导层检查 (分区之外) ================"
+          # idbloader @扇区64, u-boot @扇区16384
+          IDB_SRC=$(sha256sum uboot/rk3568/kickpi-k1/idbloader.img 2>/dev/null | awk '{print $1}')
+          UB_SRC=$(sha256sum uboot/rk3568/kickpi-k1/u-boot.itb 2>/dev/null | awk '{print $1}')
+          IDB_N=$(stat -c%s uboot/rk3568/kickpi-k1/idbloader.img 2>/dev/null || echo 0)
+          UB_N=$(stat -c%s uboot/rk3568/kickpi-k1/u-boot.itb 2>/dev/null || echo 0)
+          IDB_IMG=$(dd if="$IMG" bs=512 skip=64 count=$(( (IDB_N + 511) / 512 )) 2>/dev/null | head -c "$IDB_N" | sha256sum | awk '{print $1}')
+          UB_IMG=$(dd if="$IMG" bs=512 skip=16384 count=$(( (UB_N + 511) / 512 )) 2>/dev/null | head -c "$UB_N" | sha256sum | awk '{print $1}')
+          echo "idbloader 源: $IDB_SRC"
+          echo "idbloader 像: $IDB_IMG"
+          [ "$IDB_SRC" = "$IDB_IMG" ] && echo "✅ idbloader@扇区64 一致" || { echo "❌ idbloader 不一致"; exit 1; }
+          echo "u-boot    源: $UB_SRC"
+          echo "u-boot    像: $UB_IMG"
+          [ "$UB_SRC" = "$UB_IMG" ] && echo "✅ u-boot@扇区16384 一致" || { echo "❌ u-boot 不一致"; exit 1; }
           echo "================ DTB 检查 ================"
           SRC=$(sha256sum uboot/rk3568/kickpi-k1/rk3568-kickpi-k1.dtb | awk '{print $1}')
           ING=$(sha256sum /tmp/bm/dtb/rockchip/rk3568-kickpi-k1.dtb | awk '{print $1}')
