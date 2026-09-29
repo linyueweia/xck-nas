@@ -94,8 +94,11 @@ jobs:
           grep -q '^maxio' /tmp/rm/etc/modules-load.d/20-maxio.conf; chk $? "20-maxio.conf"
           grep -q maxio "$K/modules.dep"; chk $? "modules.dep 含 maxio"
           grep -q maxio "$K/modules.alias"; chk $? "modules.alias 含 maxio 别名"
-          [ -x /tmp/rm/usr/local/bin/k1-net-setup.sh ]; chk $? "k1-net-setup.sh"
-          [ -L /tmp/rm/etc/systemd/system/multi-user.target.wants/k1-net-setup.service ]; chk $? "systemd 服务已启用"
+          [ -x /tmp/rm/usr/trim/bin/k1-load-maxio.sh ]; chk $? "k1-load-maxio.sh (sysinit 脚本)"
+          [ -L /tmp/rm/etc/systemd/system/sysinit.target.wants/k1-load-maxio.service ]; chk $? "k1-load-maxio.service 已挂到 sysinit.target"
+          grep -q "WantedBy=sysinit.target" /tmp/rm/etc/systemd/system/k1-load-maxio.service; chk $? "service 声明 WantedBy=sysinit.target"
+          grep -q "Before=sysinit.target" /tmp/rm/etc/systemd/system/k1-load-maxio.service; chk $? "service 声明 Before=sysinit.target"
+          [ -x /tmp/rm/usr/local/bin/k1-net-dump.sh ]; chk $? "k1-net-dump.sh"
           echo "================ modprobe 干跑验证 ================"
           if modprobe -d /tmp/rm -n --set-version=6.18.18.c951-trim maxio; then
             echo "   ✅ modprobe maxio 可解析"
