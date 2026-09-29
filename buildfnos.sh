@@ -177,7 +177,18 @@ ROOT_PART="${LOOP_DEVICE}p2"
 
 sudo mount "$ROOT_PART" "$ROOT_MOUNT" || { echo "❌ 挂载 root 分区失败"; exit 1; }
 
-# 不扩容：rootfs 保持官方默认大小，不做任何修改
+# 不扩容：rootfs 保持官方默认大小
+
+# ---------- 设备专用 rootfs 定制钩子 ----------
+CUSTOMIZE_SCRIPT="$UBOOT_PATH/customize-rootfs.sh"
+if [[ -f "$CUSTOMIZE_SCRIPT" ]]; then
+  echo "🔧 执行设备 rootfs 定制: $DEVICE"
+  if ! sudo -E DEVICE_ROOT="$ROOT_MOUNT" DEVICE="$DEVICE" bash "$CUSTOMIZE_SCRIPT"; then
+    echo "❌ 设备 rootfs 定制失败: $DEVICE"; exit 1
+  fi
+else
+  echo "ℹ️ 无定制脚本（$CUSTOMIZE_SCRIPT 不存在），跳过"
+fi
 
 # 读取 fnOS 版本号用于产物命名（/etc/os-release 是 Debian/fnOS 标准位置）
 FNOS_VERSION=$(sed -n 's/^VERSION_ID="\?\([^"]*\)"\?/\1/p' "$ROOT_MOUNT/etc/os-release" 2>/dev/null | head -n1)
