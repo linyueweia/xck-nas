@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq xz-utils
+          sudo apt-get install -y jq xz-utils kmod
 
       - name: Download Official FnOS Universal Base Image
         id: download
@@ -55,26 +55,45 @@ jobs:
             exit 1
           )
 
-      - name: Verify injected DTB
+      - name: Verify image (DTB + rootfs customizations)
         run: |
-          cat > /tmp/verify_dtb.sh << 'SCRIPT'
-          #!/bin/bash
           set -e
           IMG=$(find out -name "*.img" | head -n1)
-          BOOT_IMG="/tmp/bootpart.img"
-          dd if="$IMG" of="$BOOT_IMG" bs=1M skip=32 count=360 2>/dev/null
-          mkdir -p /tmp/bm
-          sudo mount -o loop,ro "$BOOT_IMG" /tmp/bm || sudo mount -o loop "$BOOT_IMG" /tmp/bm
-          SRC_SHA=$(sha256sum uboot/rk3568/kickpi-k1/rk3568-kickpi-k1.dtb | awk '{print $1}')
-          ING_SHA=$(sha256sum /tmp/bm/dtb/rockchip/rk3568-kickpi-k1.dtb | awk '{print $1}')
-          echo "=== source dtb: $SRC_SHA"
-          echo "=== img    dtb: $ING_SHA"
-          echo "=== fnEnv.txt ==="; cat /tmp/bm/fnEnv.txt || true
-          if [ "$SRC_SHA" = "$ING_SHA" ]; then echo "✅ DTB 一致"; else echo "❌ DTB 不一致"; sudo umount /tmp/bm; exit 1; fi
-          sudo umount /tmp/bm || true
-          SCRIPT
-          chmod +x /tmp/verify_dtb.sh
-          bash /tmp/verify_dtb.sh
+          echo "镜像: $IMG"
+          LOOP=$(sudo losetup -fP --show "$IMG")
+          echo "loop: $LOOP"
+          mkdir -p /tmp/bm /tmp/rm
+          sudo mount -o loop,ro "${LOOP}p1" /tmp/bm
+          sudo mount -o loop,ro "${LOOP}p2" /tmp/rm
+          echo "================ DTB 检查 ================"
+          SRC=$(sha256sum uboot/rk3568/kickpi-k1/rk3568-kickpi-k1.dtb | awk '{print $1}')
+          ING=$(sha256sum /tmp/bm/dtb/rockchip/rk3568-kickpi-k1.dtb | awk '{print $1}')
+          echo "source: $SRC"; echo "image : $ING"
+          [ "$SRC" = "$ING" ] && echo "✅ DTB 一致" || { echo "❌ DTB 不一致"; exit 1; }
+          echo "================ rootfs 定制检查 ================"
+          K=/tmp/rm/lib/modules/6.18.18.c951-trim
+          ok=1
+          chk(){ if [ "$1" = "0" ]; then echo "   ✅ $2"; else echo "   ❌ $2"; ok=0; fi; }
+          [ -f "$K/kernel/drivers/net/phy/maxio.ko" ]; chk $? "maxio.ko 已注入 ($(stat -c%s $K/kernel/drivers/net/phy/maxio.ko 2>/dev/null || echo 0) 字节)"
+          [ -L /tmp/rm/sbin/modprobe ]; chk $? "kmod 软链 modprobe"
+          [ -L /tmp/rm/sbin/depmod ]; chk $? "kmod 软链 depmod"
+          grep -q '^maxio' /tmp/rm/etc/modules-load.d/20-maxio.conf; chk $? "20-maxio.conf"
+          grep -q maxio "$K/modules.dep"; chk $? "modules.dep 含 maxio"
+          grep -q maxio "$K/modules.alias"; chk $? "modules.alias 含 maxio 别名"
+          [ -x /tmp/rm/usr/local/bin/k1-net-setup.sh ]; chk $? "k1-net-setup.sh"
+          [ -L /tmp/rm/etc/systemd/system/multi-user.target.wants/k1-net-setup.service ]; chk $? "systemd 服务已启用"
+          echo "================ modprobe 干跑验证 ================"
+          if modprobe -d /tmp/rm -n --set-version=6.18.18.c951-trim maxio; then
+            echo "   ✅ modprobe maxio 可解析"
+          else
+            echo "   ❌ modprobe maxio 失败"; ok=0
+          fi
+          echo "================ maxio.ko 关键属性 ================"
+          modinfo /tmp/rm/lib/modules/6.18.18.c951-trim/kernel/drivers/net/phy/maxio.ko | grep -E "name|vermagic|depends"
+          sudo umount /tmp/bm /tmp/rm || true
+          sudo losetup -d "$LOOP" || true
+          [ "$ok" = "1" ] || { echo "❌ 固件定制检查未通过"; exit 1; }
+          echo "✅ 全部检查通过"
 
       - name: Upload build log
         uses: actions/upload-artifact@v4
