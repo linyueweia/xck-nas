@@ -1,0 +1,111 @@
+name: Build DTB only (KICKPI K1 / RK3568)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'dts/rk3568-kickpi-k1-linux.dts'
+      - 'build-dtb-k1.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  build-dtb-k1:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends device-tree-compiler
+
+      - name: 编译 K1 DTB
+        run: |
+          chmod +x build-dtb-k1.sh
+          ./build-dtb-k1.sh
+
+      - name: 校验 DTB（双千兆 PHY / 复位 GPIO / SATA）
+        run: |
+          set -e
+          DTB=rk3568-kickpi-k1.dtb
+          test -f "$DTB" || { echo "!! 未找到 DTB"; exit 1; }
+          sha256sum "$DTB"
+
+          # 用 fdtget 直接读二进制属性，避免 dtc 反编译格式差异
+          # （dtc 1.7.0 反编译多字符串为 "a\0b"，1.7.2 为 "a", "b"）
+          ges() { fdtget -t s "$DTB" "$1" "$2" 2>/dev/null; }
+          gei() { fdtget -t i "$DTB" "$1" "$2" 2>/dev/null; }
+          has() { fdtget -p "$DTB" "$1" 2>/dev/null | grep -qx "$2"; }
+          fail() { echo "!! $1"; exit 1; }
+
+          C="$(ges / compatible)"
+          echo "$C" | grep -q 'rockchip,rk3568-kickpi-k1' || fail "compatible 不匹配: $C"
+          echo "OK: compatible = $C"
+
+          for n in /ethernet@fe2a0000 /ethernet@fe010000; do
+            [ "$(ges "$n" status)" = "okay" ]        || fail "$n status != okay"
+            [ "$(ges "$n" phy-mode)" = "rgmii" ]     || fail "$n phy-mode != rgmii"
+            [ "$(ges "$n" clock_in_out)" = "output" ] || fail "$n clock_in_out != output"
+            has "$n" snps,reset-gpio       || fail "$n 缺 snps,reset-gpio"
+            has "$n" snps,reset-active-low || fail "$n 缺 snps,reset-active-low"
+            RD="$(gei "$n" snps,reset-delays-us)"
+            [ "$RD" = "0 20000 100000" ] || fail "$n reset-delays-us=($RD)"
+            echo "OK: $n okay/rgmii/output reset-delays=($RD)"
+          done
+
+          [ "$(gei /ethernet@fe2a0000 tx_delay)" = "33" ] && echo "OK: gmac0 tx_delay=0x21" || fail "gmac0 tx_delay != 0x21"
+          [ "$(gei /ethernet@fe2a0000 rx_delay)" = "60" ] && echo "OK: gmac0 rx_delay=0x3c" || fail "gmac0 rx_delay != 0x3c"
+          [ "$(gei /ethernet@fe010000 tx_delay)" = "47" ] && echo "OK: gmac1 tx_delay=0x2f" || fail "gmac1 tx_delay != 0x2f"
+          [ "$(gei /ethernet@fe010000 rx_delay)" = "57" ] && echo "OK: gmac1 rx_delay=0x39" || fail "gmac1 rx_delay != 0x39"
+
+          P0="$(echo $(gei /ethernet@fe2a0000 snps,reset-gpio) | awk '{print $2, $3}')"
+          [ "$P0" = "27 1" ] && echo "OK: gmac0 reset pin=RK_PD3(27)" || fail "gmac0 复位脚=($P0)"
+          P1="$(echo $(gei /ethernet@fe010000 snps,reset-gpio) | awk '{print $2, $3}')"
+          [ "$P1" = "7 1" ] && echo "OK: gmac1 reset pin=RK_PA7(7)" || fail "gmac1 复位脚=($P1)"
+
+          for m in /ethernet@fe2a0000/mdio /ethernet@fe010000/mdio; do
+            [ "$(ges "$m" compatible)" = "snps,dwmac-mdio" ] || fail "$m 非 dwmac-mdio"
+          done
+          echo "OK: mdio0/mdio1 双 MDIO 总线"
+
+          [ "$(ges /sata@fc000000 status)" = "okay" ]     || fail "sata0 未启用"
+          [ "$(ges /sata@fc000000 phy-names)" = "sata-phy" ] || fail "sata0 缺 phy-names"
+          [ "$(ges /phy@fe820000 status)" = "okay" ]      || fail "combphy0_us 未启用"
+          echo "OK: sata0(@fc000000) + combphy0_us(@fe820000)"
+
+          echo "===== K1 DTB 校验全部通过 ====="
+
+      - name: 生成校验文件
+        run: |
+          sha256sum rk3568-kickpi-k1.dtb > sha256sums-k1.txt
+          cat sha256sums-k1.txt
+
+      - name: 上传 DTB 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: rk3568-kickpi-k1-dtb
+          path: |
+            rk3568-kickpi-k1.dtb
+            sha256sums-k1.txt
+          retention-days: 7
+
+      - name: 发布 Release（仅标签推送时）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rk3568-kickpi-k1.dtb
+            sha256sums-k1.txt
+          body: |
+            KICKPI K1 (RK3568) 设备树 DTB（仅 DTB，不含固件）
+
+            展开式自包含 DTB（源出 KICKPI SDK6.1 官方设备树），含：
+            - 双千兆：gmac0(RK_PD3 复位, tx/rx=0x21/0x3c) + gmac1(RK_PA7 复位, tx/rx=0x2f/0x39)
+            - SATA0 (sata@fc000000) + combphy0_us (phy@fe820000)
+            - USB / PCIe / WiFi-BT / IR / 40pin
+
+            用法：放入 boot 分区 dtb/rockchip/，并设
+              fdtfile=rockchip/rk3568-kickpi-k1.dtb

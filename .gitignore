@@ -1,0 +1,13 @@
+# 构建产物 —— CI 内生成，不入库
+/fnnas-arm64/
+/out/
+/out-compressed/
+/build-logs/
+/kernel/
+
+# 编译产物（设备目录 uboot/<soc>/<device>/*.dtb 需入库，故只忽略仓库根目录）
+/*.dtb
+
+# 编辑器 / 系统
+*.swp
+.DS_Store
