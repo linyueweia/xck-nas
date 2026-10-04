@@ -154,6 +154,38 @@ uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dt
 | `extlinux.conf` | 系统引导配置（earlycon @ fe660000，console=ttyS2,1500000） |
 | `rk3568-lyt-t68m.dtb` | 最终设备树（4f785bc7，与 dist/ 一致，76481B） |
 
+## NPU（rknpu）支持与启用方式
+
+T68M 的 NPU 由**飞牛内核自带的 out-of-tree 驱动**提供，与官方机型（NanoPi R5S / EasePi R1）**完全同源**，
+本仓库**未对 NPU 做任何特殊改动**：
+
+- **驱动**：`/usr/lib/modules/<kver>/updates/trim/rk_vcodec/rknpu.ko`（随固件自带）
+- **开机自加载**：`/etc/modules-load.d/trim-rk_vcodec.conf` → `rga3` / `rknpu` / `rk_vcodec`
+  （与官方 R5S、EasePi R1 固件中的内容**逐字一致**）
+- **DTB**：NPU 节点（`npu@fde40000` / `iommu@fde4b000` / `bus-npu` / `npu-opp-table` / `power-domain@6`）
+  与飞牛 6.18 原生 NanoPi R5S 官方 DTB **逐属性一致**（含 6 个 nvmem cell 与全部 phandle 引用）
+- **运行态**：`/proc/rknpu/{version,freq,volt,load,power,reset}` 齐全，驱动 **v0.9.8**
+
+### 启用 NPU 的正确步骤（与官方一致）
+
+NPU 的**用户态运行时 `librknnrt.so` 与 AI 模型由飞牛官方的「飞牛AI引擎」应用提供** ——
+官方固件同样不内置（这对 R5S / EasePi R1 也一样），因此本仓库固件**不做注入**。
+
+1. **系统版本 ≥ 1.2.0604**
+   （1.2.0302 时应用中心尚未上架该引擎，`appcenter-cli install trim.ai-runtime-rk3568` 会返回 `Application not found`）；
+2. **安装引擎**：应用中心 → 安装 **「飞牛AI引擎(RK356x)」**
+   （应用 ID：`trim.ai-runtime-rk3568`，约 1.9G；CLI 等价命令 `appcenter-cli install trim.ai-runtime-rk3568`）；
+3. **打开加速**：相册 → 设置 → AI 设置 → 打开 **「AI 硬件加速」**；
+4. **验证**：
+   ```bash
+   cat /proc/rknpu/version     # RKNPU driver: v0.9.8
+   cat /proc/rknpu/load        # 跑 AI 任务时应 > 0%
+   ```
+   实测：T68M 开启后 `/proc/rknpu/load` 可达 **60%+**。
+
+> 引擎安装后会把 `librknnrt.so` 自动部署到 `/usr/lib/`、`/ld_lib/`、`/vol1/@sysappmeta/ai-manager/solib/` 三处，
+> **无需手工放置**。
+
 ## 已知约束
 
 - 禁用 `pcie2x1` 后，原 PCIe2x1/miniPCIe 通道上的非 SATA2 设备不可用。
@@ -175,6 +207,7 @@ cat /sys/class/devfreq/fdab0000.npu/cur_freq   # NPU 当前频率（应 ≈900MH
 
 | commit | 内容 |
 |--------|------|
+| （本次） | **docs**: README 补充 NPU 启用流程（系统 ≥ 1.2.0604 + 安装 `trim.ai-runtime-rk3568`「飞牛AI引擎(RK356x)」+ 相册开启 AI 硬件加速；固件侧无需 NPU 特改） |
 | （本次） | **feat**: DTB 基底切换至飞牛 6.18 原生 NanoPi R5S 骨架（460 节点三方归属全对齐，仅 phandle 编号重排；剔除 R5S 板载 gpio-leds，保留 T68M leds/sdio-pwrseq/minipcie regulator） |
 | `5a2ceb9` | **fix**: NPU `iommu@fde4b000` compatible 恢复双值（对齐骨架，兼容主线+SDK 血统） |
 | `bd08181` | **feat**: T68M DTB 移植至 6.18 EasePi R1 骨架（历史基底，已被 R5S 取代） |
