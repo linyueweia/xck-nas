@@ -100,15 +100,36 @@ jobs:
           cp /tmp/fnnas.config .config
           sed -i '/^CONFIG_MAXIO_PHY=/d' .config
           echo 'CONFIG_MAXIO_PHY=y' >> .config
+          # ---- 关键：对齐飞牛内核的 vermagic ----
+          # 飞牛实际:  6.18.18.c951-trim SMP mod_unload aarch64   (非 preempt)
+          # 不这么做会编成 6.18.18+ SMP preempt ... -> rootfs 里既有模块
+          # (含 stmmac/dwmac-rk) vermagic 不匹配, 全部加载失败
+          ./scripts/config --file .config \
+            --disable CONFIG_PREEMPT_DYNAMIC \
+            --disable CONFIG_PREEMPT --disable CONFIG_PREEMPT_VOLUNTARY \
+            --enable CONFIG_PREEMPT_NONE_BUILD --enable CONFIG_PREEMPT_NONE \
+            --set-str CONFIG_LOCALVERSION ""
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig >/dev/null 2>&1
+          : > .scmversion   # 阻止 scripts/setlocalversion 追加 '+'
           echo "--- 最终 config 校验 ---"
-          grep -E 'CONFIG_MAXIO_PHY|CONFIG_DWMAC|CONFIG_STMMAC' .config
+          grep -E 'CONFIG_MAXIO_PHY|CONFIG_DWMAC|CONFIG_STMMAC|CONFIG_PREEMPT_NONE|CONFIG_LOCALVERSION=' .config
 
       - name: Build kernel (Image + dtbs + modules)
         run: |
           set -e
           cd /tmp/ks
-          time make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image dtbs modules
+          time make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION=.c951-trim -j$(nproc) Image dtbs modules
+
+      - name: Verify kernel version string (must match FnNAS vermagic)
+        run: |
+          set -e
+          cd /tmp/ks
+          V=$(strings arch/arm64/boot/Image | grep -m1 -oE '6\.18\.18[^ ]*' || true)
+          echo "kernel version string: [$V]"
+          case "$V" in
+            *c951-trim*) echo "OK: localversion matches FnNAS 6.18.18.c951-trim" ;;
+            *) echo "::error::版本串不含 c951-trim -> $V"; exit 1 ;;
+          esac
 
       - name: Verify built-in maxio inside Image
         run: |
