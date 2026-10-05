@@ -1,0 +1,143 @@
+name: Build K1 fnOS Kernel (built-in MAXIO PHY + stmmac PHY-resume)
+
+# 目的：给 KICKPI K1 (RK3568) 编译一个把 Maxio MAE0621A PHY 驱动 **编进内核** 的
+#       fnOS 6.18.18 内核（built-in，而不是模块）。
+#
+# 为什么必须 built-in（本轮调试的结论）：
+#   PHY 驱动匹配只在 udev 冷插拔那一刻发生一次；maxio 作为模块加载时永远晚于
+#   dwmac_rk 的 PHY 探测，PHY 会落到 generic PHY 驱动 -> 不会配置 clkout 125MHz ->
+#   MAC 收不到 RXC -> stmmac 的 DMA 软复位超时 "Failed to reset the dma"。
+#   原厂 Debian 能上网口，正是因为它把 maxio 编进了内核。
+#
+# 同时打上 stmmac 上游修复 06232cb44bc8（resume PHY before hardware setup）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_ver:
+        description: 'FnNAS kernel version (e.g. 6.18.18)'
+        required: true
+        default: '6.18.18'
+
+jobs:
+  build-kernel:
+    name: K1 kernel (built-in MAXIO PHY) ${{ github.event.inputs.kernel_ver }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cross toolchain + kernel build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu make bc flex bison \
+            libssl-dev libelf-dev kmod device-tree-compiler cpio rsync xz-utils python3
+          aarch64-linux-gnu-gcc --version | head -1
+
+      - name: Fetch FnNAS kernel config (from ophub kernel bundle)
+        run: |
+          set -e
+          KV="${{ github.event.inputs.kernel_ver }}"
+          URL="https://github.com/ophub/fnnas/releases/download/kernel_fnnas/${KV}-rockchip.tar.gz"
+          curl -fL --retry 3 -o /tmp/kb.tar.gz "$URL"
+          mkdir -p /tmp/kb && tar xzf /tmp/kb.tar.gz -C /tmp/kb
+          tar xzf "$(find /tmp/kb -name 'boot-*.tar.gz' | head -1)" -C /tmp/kb
+          CFG="$(find /tmp/kb -maxdepth 2 -name 'config-*' | head -1)"
+          echo "config: $CFG"
+          cp "$CFG" /tmp/fnnas.config
+          head -3 /tmp/fnnas.config
+
+      - name: Clone unifreq kernel source (tag v<KV>)
+        run: |
+          set -e
+          KV="${{ github.event.inputs.kernel_ver }}"
+          git clone --depth=1 --branch "v${KV}" \
+            https://github.com/unifreq/linux-6.18.y /tmp/ks
+          cd /tmp/ks
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
+          du -sh /tmp/ks
+
+      - name: Inject MAXIO PHY driver as built-in + apply stmmac fix
+        run: |
+          set -e -o pipefail
+          cd /tmp/ks
+          # ---- 1) 放入驱动源码 ----
+          cp "$GITHUB_WORKSPACE/kernel-files/maxio.c" drivers/net/phy/maxio.c
+          # 6.18 兼容：phy_device.eee_broken_modes 成员已移除
+          sed -i 's|^\([[:space:]]*\)phydev->eee_broken_modes = broken;|\1/* removed: member gone in >=6.14 */|' \
+              drivers/net/phy/maxio.c
+          grep -n "MODULE_LICENSE" drivers/net/phy/maxio.c
+
+          # ---- 2) Kconfig：新增 CONFIG_MAXIO_PHY ----
+          python3 - <<'PY'
+          p = 'drivers/net/phy/Kconfig'
+          s = open(p).read()
+          if 'config MAXIO_PHY' not in s:
+              blk = ('config MAXIO_PHY\n'
+                     '\ttristate "Maxio PHYs"\n'
+                     '\thelp\n'
+                     '\t  Currently supports the Maxio MAE0621A family of Gigabit Ethernet PHYs.\n\n')
+              s = s.replace('config MOTORCOMM_PHY', blk + 'config MOTORCOMM_PHY', 1)
+              open(p, 'w').write(s)
+              print('Kconfig: MAXIO_PHY added')
+          else:
+              print('Kconfig: already present')
+          PY
+
+          # ---- 3) Makefile：加入编译目标 ----
+          if ! grep -q 'CONFIG_MAXIO_PHY' drivers/net/phy/Makefile; then
+            sed -i 's|^obj-\$(CONFIG_MOTORCOMM_PHY)|obj-$(CONFIG_MAXIO_PHY)\t\t+= maxio.o\nobj-$(CONFIG_MOTORCOMM_PHY)|' \
+                drivers/net/phy/Makefile
+          fi
+          grep -n 'MAXIO' drivers/net/phy/Makefile
+
+          # ---- 4) stmmac 上游修复 06232cb44bc8 ----
+          git apply --3way "$GITHUB_WORKSPACE/patch/0001-net-stmmac-resume-PHY-before-hw-setup.patch" \
+            && echo "stmmac patch: applied" || echo "stmmac patch: skipped (already present?)"
+
+          # ---- 5) config：把 maxio 设为 built-in ----
+          cp /tmp/fnnas.config .config
+          sed -i '/^CONFIG_MAXIO_PHY=/d' .config
+          echo 'CONFIG_MAXIO_PHY=y' >> .config
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig >/dev/null 2>&1
+          echo "--- 最终 config 校验 ---"
+          grep -E 'CONFIG_MAXIO_PHY|CONFIG_DWMAC|CONFIG_STMMAC' .config
+
+      - name: Build kernel (Image + dtbs + modules)
+        run: |
+          set -e
+          cd /tmp/ks
+          time make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image dtbs modules
+
+      - name: Verify built-in maxio inside Image
+        run: |
+          set -e
+          cd /tmp/ks
+          # built-in 驱动必须出现在 vmlinux 符号里
+          aarch64-linux-gnu-nm vmlinux 2>/dev/null | grep -i -E "maxio_mae0621a|maxio_nc_drvs" | head -5 \
+            || echo "!! 未找到 maxio 符号（可能是 =m 而非 =y）"
+          ls -la arch/arm64/boot/Image
+
+      - name: Collect artifacts
+        run: |
+          set -e
+          cd /tmp/ks
+          mkdir -p /tmp/out
+          cp arch/arm64/boot/Image /tmp/out/Image-6.18.18-k1-maxio
+          mkdir -p /tmp/out/dtbs
+          cp -a arch/arm64/boot/dts/rockchip/rk3568-kickpi-k1.dtb /tmp/out/dtbs/ 2>/dev/null || true
+          # 仅打包我们会替换的模块（stmmac 系，含修复）
+          mkdir -p /tmp/out/modules
+          for m in stmmac.ko stmmac-platform.ko dwmac-rk.ko stmmac-*.ko; do
+            find . -name "$m" -exec cp -v {} /tmp/out/modules/ \; 2>/dev/null || true
+          done
+          ls -la /tmp/out /tmp/out/dtbs /tmp/out/modules || true
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: k1-kernel-${{ github.event.inputs.kernel_ver }}
+          path: /tmp/out/
+          if-no-files-found: error
+          retention-days: 14
