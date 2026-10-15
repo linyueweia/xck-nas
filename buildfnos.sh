@@ -177,9 +177,27 @@ ROOT_PART="${LOOP_DEVICE}p2"
 
 sudo mount "$ROOT_PART" "$ROOT_MOUNT" || { echo "❌ 挂载 root 分区失败"; exit 1; }
 
-# 不扩容：rootfs 保持官方默认大小，不做任何修改
+# 不扩容：rootfs 保持官方默认大小
+# 最小化注入（2026-10-15 定案，与 lyw-kf 同款两层修复的第二层）：
+#   硬件看门狗保命件 —— 官方 fnOS 对 /dev/watchdog 零管理（/usr/trim 无一引用，
+#   K1 实机取证同款），内核整机挂死（如 NPU CMA 分配失败路径）只能人工断电；
+#   注入持续喂狗脚本 + systemd 单元开机自启，挂死时由硬件超时硬复位自愈。
+sudo install -Dm755 assets/lyt-t68m-watchdog.sh "$ROOT_MOUNT/usr/local/sbin/lyt-t68m-watchdog.sh" \
+  || { echo "❌ 注入 lyt-t68m-watchdog.sh 失败"; exit 1; }
+sudo install -Dm644 assets/lyt-t68m-watchdog.service "$ROOT_MOUNT/etc/systemd/system/lyt-t68m-watchdog.service" \
+  || { echo "❌ 注入 lyt-t68m-watchdog.service 失败"; exit 1; }
+sudo mkdir -p "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants"
+sudo ln -sf ../lyt-t68m-watchdog.service \
+  "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/lyt-t68m-watchdog.service" \
+  || { echo "❌ 启用 lyt-t68m-watchdog.service 失败"; exit 1; }
+# 自检：三件缺一即构建失败（-L 判使能链接，避免跟随链接按 CI runner 根解析误判）
+[[ -x "$ROOT_MOUNT/usr/local/sbin/lyt-t68m-watchdog.sh" ]] || { echo "❌ 自检：喂狗脚本未就位"; exit 1; }
+[[ -f "$ROOT_MOUNT/etc/systemd/system/lyt-t68m-watchdog.service" ]] || { echo "❌ 自检：单元文件未就位"; exit 1; }
+[[ -L "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/lyt-t68m-watchdog.service" ]] \
+  || { echo "❌ 自检：单元未启用（wants 缺链）"; exit 1; }
+echo "✅ 已注入硬件看门狗保命件（lyt-t68m-watchdog.service，开机自启）"
 
-# 读取 fnOS 版本号用于产物命名（/etc/os-release 是 Debian/fnOS 标准位置）
+# 读取 fnOS 版本号仅作日志信息（产物命名已定案为固定 IMG_NAME，不再拼版本/构建号）
 FNOS_VERSION=$(sed -n 's/^VERSION_ID="\?\([^"]*\)"\?/\1/p' "$ROOT_MOUNT/etc/os-release" 2>/dev/null | head -n1)
 [[ -n "$FNOS_VERSION" ]] || { echo "⚠️ 无法从 rootfs 读取 VERSION_ID，跳过版本号"; }
 
@@ -196,10 +214,12 @@ echo "📁 输出目录: $OUT_DIR"
 echo "📦 镜像文件: $(basename "$MODIFIED_IMG")"
 echo "========================================"
 
-# 官方风格最终命名：fnos_Mainland-PE_arm_<VER>_<DEVICE>_<BUILD>.img
-if [[ -n "$FNOS_VERSION" ]]; then
-  FINAL_IMG="$OUT_DIR/fnos_Mainland-PE_arm_${FNOS_VERSION}_${DEVICE_LABEL}_${BUILD_NUM}.img"
-  mv "$MODIFIED_IMG" "$FINAL_IMG" || { echo "❌ 重命名输出镜像失败"; exit 1; }
-  echo "📦 最终产物: $(basename "$FINAL_IMG")"
-fi
+# 官方风格最终命名（2026-10-15 定案）：fnos_Mainland-PE_arm_<Debian主版本>_<设备标识>.img
+#   例：fnos_Mainland-PE_arm_12_LYT-T68M.img —— 不再拼构建号后缀（多构建并存由 Release tag 区分）；
+#   IMG_DEBIAN_MAJOR / IMG_NAME 均可环境变量覆盖（IMG_NAME = 整体覆盖）。
+IMG_DEBIAN_MAJOR="${IMG_DEBIAN_MAJOR:-12}"
+IMG_NAME="${IMG_NAME:-fnos_Mainland-PE_arm_${IMG_DEBIAN_MAJOR}_${DEVICE_LABEL}.img}"
+FINAL_IMG="$OUT_DIR/$IMG_NAME"
+mv "$MODIFIED_IMG" "$FINAL_IMG" || { echo "❌ 重命名输出镜像失败"; exit 1; }
+echo "📦 最终产物: $(basename "$FINAL_IMG")"
 exit 0

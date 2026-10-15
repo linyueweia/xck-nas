@@ -1,0 +1,13 @@
+[Unit]
+Description=LYT T68M: hardware watchdog keepalive (kernel-hang self-recovery)
+After=multi-user.target
+ConditionPathExists=/dev/watchdog
+
+[Service]
+Type=simple
+ExecStart=/bin/sh /usr/local/sbin/lyt-t68m-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

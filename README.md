@@ -20,7 +20,7 @@
 
 | 流水线 | Workflow | 产物 | 触发方式 |
 |--------|----------|------|----------|
-| **完整固件打包** | `Build FnOS T68M Image` | `fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img.xz` + SHA256SUMS（发布到 Release） | 手动触发 |
+| **完整固件打包** | `Build FnOS T68M Image` | `fnos_Mainland-PE_arm_12_LYT-T68M.img.xz` + SHA256SUMS（发布到 Release） | 手动触发 |
 | **DTB 云编译** | `Build DTB only` | `rk3568-lyt-t68m.dtb`（artifact 保留 7 天；tag 推送自动发 Release） | 手动 / push `dts/**`、`build-dtb.sh` |
 
 ## DTB 移植血统与 NPU 修复
@@ -94,10 +94,10 @@ DTB 作为骨架。移植流程：
         ├── 挂载 rootfs 分区（btrfs）
         │     └── 不扩容，保持官方默认大小
         ▼
-   out/fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img
+   out/fnos_Mainland-PE_arm_12_LYT-T68M.img
         │  xz -9 压缩
         ▼
-   out-compressed/fnos_Mainland-PE_arm_<版本>_LYT-T68M_<构建号>.img.xz + SHA256SUMS
+   out-compressed/fnos_Mainland-PE_arm_12_LYT-T68M.img.xz + SHA256SUMS
         │  action-gh-release
         ▼
    Release: fnos_t68m_<run_number>
@@ -150,7 +150,7 @@ uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dt
 |------|------|
 | `idbloader.img` | first-stage bootloader（RK3568 通用，182KB） |
 | `u-boot.itb` | FIT 格式 u-boot（RK3568 通用，1.1MB） |
-| `fnEnv.txt` | 引导变量：`fdtfile=rockchip/rk3568-lyt-t68m.dtb` + `cma=256M` |
+| `fnEnv.txt` | 引导变量：`fdtfile=rockchip/rk3568-lyt-t68m.dtb` + `cma=1G` |
 | `extlinux.conf` | 系统引导配置（earlycon @ fe660000，console=ttyS2,1500000） |
 | `rk3568-lyt-t68m.dtb` | 最终设备树（4f785bc7，与 dist/ 一致，76481B） |
 
@@ -191,7 +191,8 @@ NPU 的**用户态运行时 `librknnrt.so` 与 AI 模型由飞牛官方的「飞
 - 禁用 `pcie2x1` 后，原 PCIe2x1/miniPCIe 通道上的非 SATA2 设备不可用。
 - GPU 用飞牛主线开源驱动（panfrost）。
 - 引导：`fdtfile=rockchip/rk3568-lyt-t68m.dtb`；串口 `console=ttyS2,1500000`。
-- 内核 `6.18.18.c951-trim`，rknpu v0.9.8，CMA `256M`（为 NPU/多媒体预留）。
+- 内核 `6.18.18.c951-trim`，rknpu v0.9.8，CMA `1G`（2026-10-15 定案：rknpu 单次要 173/339MB 连续 DMA，`256M` 池小于 339MB 请求必失败，闭源驱动失败路径整机挂死——与 lyw-kf K1 线同案取证，详见 lyw-kf 仓 TROUBLESHOOTING.md 6e 章）。
+- 硬件看门狗：注入 `lyt-t68m-watchdog.service`（开机自启持续喂 `/dev/watchdog0`，官方 fnOS 零管理），内核挂死时硬件超时硬复位自愈，不再人工断电。
 
 ## 验证（开机后）
 
