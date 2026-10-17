@@ -901,7 +901,13 @@
 		snps,reset-active-low;
 		snps,reset-delays-us = <0x00 0x4e20 0x186a0>;
 		label = "lan2";
-		phy-mode = "rgmii-id";
+		/* 2026-10-17：rgmii-id 在 RK3568 dwmac 上走 set_to_rgmii(0,0) —— MAC 侧延迟被清零、
+		   DT 里的 tx_delay/rx_delay 不被读取（厂商 6.1 驱动实测：56B 丢 65%、1400B 丢 90%，
+		   接口错误计数却为 0）。改为 "rgmii" + MAC 侧延迟；取值与厂商 6.12 出厂 DTB
+		   （fnnas_rockchip_lyt-t68m）一致。EEE 按官方默认保持开启，本节点不写 eee-broken-*。 */
+		phy-mode = "rgmii";
+		tx_delay = <0x42>;
+		rx_delay = <0x28>;
 		clock_in_out = "output";
 		assigned-clocks = <0x12 0x189 0x12 0x186>;
 		assigned-clock-parents = <0x12 0x187>;
@@ -3356,7 +3362,10 @@
 		assigned-clock-rates = <0x00 0x7735940>;
 		clock_in_out = "output";
 		phy-handle = <0xcd>;
-		phy-mode = "rgmii-id";
+		/* 同上：延迟放 MAC 侧（厂商 6.12 出厂 DTB 同值） */
+		phy-mode = "rgmii";
+		tx_delay = <0x3c>;
+		rx_delay = <0x2f>;
 		pinctrl-names = "default";
 		pinctrl-0 = <0xce 0xcf 0xd0 0xd1 0xd2>;
 		snps,reset-gpio = <0xf3 0x0f 0x01>;

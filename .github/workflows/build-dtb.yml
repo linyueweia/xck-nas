@@ -41,6 +41,34 @@ jobs:
             grep -q "$node" /tmp/check.dts && echo "OK: $node" || { echo "!! 缺少 $node"; exit 1; }
           done
 
+          # 网口时序校验（2026-10-17）：rgmii-id 在 RK3568 dwmac 上走 set_to_rgmii(0,0) —— MAC 侧延迟被清零、
+          # DT 里的 tx/rx_delay 不会被读取（厂商 6.1 驱动实测：56B 丢 65%、1400B 丢 90%，接口错误计数仍为 0）。
+          # 两个 gmac 必须是 phy-mode="rgmii" + 与厂商 6.12 出厂 DTB(fnnas_rockchip_lyt-t68m) 相同的延迟值；
+          # EEE 按官方默认保持开启 → PHY 节点不得出现 eee-broken-*。
+          python3 - <<'PY'
+          txt = open("/tmp/check.dts", encoding="utf-8", errors="replace").read()
+
+          def block(name):
+              i = txt.index("ethernet@%s {" % name)
+              depth = 0
+              out = []
+              for line in txt[i:].splitlines():
+                  depth += line.count("{") - line.count("}")
+                  out.append(line)
+                  if depth == 0 and len(out) > 1:
+                      break
+              return "\n".join(out)
+
+          exp = {"fe010000": ("0x42", "0x28"), "fe2a0000": ("0x3c", "0x2f")}
+          for n, (tx, rx) in exp.items():
+              b = block(n)
+              assert 'phy-mode = "rgmii";' in b, "%s phy-mode 不是 rgmii（MAC 延迟会被清零）" % n
+              assert "tx_delay = <%s>;" % tx in b, "%s tx_delay 应为 %s" % (n, tx)
+              assert "rx_delay = <%s>;" % rx in b, "%s rx_delay 应为 %s" % (n, rx)
+              assert "eee-broken" not in b, "%s 的 PHY 节点出现 eee-broken-*（与官方默认不一致）" % n
+              print("OK: ethernet@%s rgmii tx=%s rx=%s" % (n, tx, rx))
+          PY
+
       - name: 校验 NPU 配置（对齐安卓原厂 DTB，权威基线）
         run: |
           dtc -I dtb -O dts rk3568-lyt-t68m.dtb -o /tmp/check2.dts
