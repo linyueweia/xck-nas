@@ -3721,7 +3721,6 @@
 	};
 	rkvenc@fdf40000 {
 		compatible = "rockchip,rkv-encoder-v1";
-		operating-points-v2 = <0x104>;
 		reg = <0x00 0xfdf40000 0x00 0x400>;
 		interrupts = <0x00 0x8c 0x04>;
 		interrupt-names = "irq_enc";
@@ -3781,7 +3780,6 @@
 	};
 	rkvdec@fdf80200 {
 		compatible = "rockchip,rkv-decoder-rk3568\0rockchip,rkv-decoder-v2";
-		operating-points-v2 = <0x105>;
 		reg = <0x00 0xfdf80200 0x00 0x400 0x00 0xfdf80100 0x00 0x100>;
 		reg-names = "regs\0link";
 		interrupts = <0x00 0x5b 0x04>;

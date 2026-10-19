@@ -95,6 +95,16 @@ jobs:
           done
           echo "===== 全部校验通过（NPU 对齐安卓原厂） ====="
 
+      - name: 媒体层 DT 门禁（转码死机防回归 · 官方形态对照，2026-10-19）
+        run: |
+          chmod +x tools/verify-t68m-media-dts.sh
+          echo "===== 现编产物 ====="
+          bash tools/verify-t68m-media-dts.sh rk3568-lyt-t68m.dtb
+          echo "===== 仓内 dist 拷贝 ====="
+          bash tools/verify-t68m-media-dts.sh dist/rk3568-lyt-t68m.dtb
+          echo "===== 仓内 uboot 拷贝（镜像实际使用，防陈旧） ====="
+          bash tools/verify-t68m-media-dts.sh uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb
+
       - name: 生成并输出校验文件
         run: |
           sha256sum rk3568-lyt-t68m.dtb > sha256sums.txt

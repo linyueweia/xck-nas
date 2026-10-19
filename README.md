@@ -204,10 +204,44 @@ cat /sys/kernel/debug/rknpu/version  # NPU 可用性（rknpu v0.9.8）
 cat /sys/class/devfreq/fdab0000.npu/cur_freq   # NPU 当前频率（应 ≈900MHz）
 ```
 
+## 转码死机防护：媒体层对齐官方（2026-10-19）
+
+**背景**：K1 线 2026-10-19 实测定案（lyw-kf 仓 TROUBLESHOOTING 6f）——fnOS 相册浏览/转码视频时，
+移植 DTB 与官方 RK3568 设备的三类差异会被 10-18 更新后的新 `rk_vcodec.ko`（of_match 按官方形态写）
+引爆：解码任务收不到中断（`rk_vcodec: timing: irq : invalid`）→ `mpp_rkvdec2 resetting...` 风暴 →
+整机挂死（硬件看门狗 89s 自愈）。T68M 与 K1 同 SoC 同 fnOS 体系，逐项体检结论：
+
+| 项 | T68M（修复前） | 官方标尺（仓内 r5s-official） | 处置 |
+|---|---|---|---|
+| IOMMU compatible（8 节点） | 7 双串 + `fe043e00` 单串 | 同 | 无缺陷 ✓ |
+| `vepu@fdee0000` | `rockchip,vpu-encoder-v2` | 同 | 无缺陷 ✓ |
+| rkvdec 锁频 / `disable-auto-freq` | 396/396/396/600 + 有 | 同 | 无缺陷 ✓ |
+| **rkvdec/rkvenc OPP 链接** | **挂 2 个（全文件 9）** | **官方 7（CPU×4+GPU+NPU+bus-npu）** | **已删（本轮唯一改动）** |
+| mpp-srv / sram / 媒体单元清单 | 与官方一致 | 同 | 无缺陷 ✓ |
+
+**改动**：`dts/rk3568-lyt-t68m.dts` 删 `operating-points-v2 = <0x105>`（rkvdec）与 `<0x104>`（rkvenc）；
+`dist/` 与 `uboot/`（镜像实际烧入）两份预编译 DTB 同步（76555→76523 B，新旧反解 diff 恰好只少这 2 行）。
+
+**门禁**：新增 `tools/verify-t68m-media-dts.sh`（MEDIA-DTS GATE(T68M)）——断言 OPP=7 基线、IOMMU 形态、
+vepu 官方名、rkvdec 锁频、媒体单元齐全、EEE 官方默认、NPU iommu 串；接入 **build-dtb.yml**（现编产物 +
+dist + uboot 三份全验，堵住 uboot 拷贝陈旧没人管的洞）与 **build-fnos-t68m.yml**（uboot 拷贝＝镜像
+实际烧入件，依赖补 `device-tree-compiler`）。负例实测：修复前的 DTB 精确报 3 处 FAIL（rc=1）、
+修复后 ALL PASS（rc=0）。
+
+**看门狗（本仓 10-15 起已内置，无需补）**：`assets/lyt-t68m-watchdog.{sh,service}` 由 `buildfnos.sh`
+构建期注入 → `multi-user.target.wants` 使能 → **三件自检缺一 `exit 1`**（构建期硬失败）；
+脚本 `fd 常开` 喂狗 + `Restart=always`，RK3568 DW 狗无 magic close（K1 实测 MAGICCLOSE=0）
+→ 进程/内核死后超时硬复位自愈。
+
+**验收边界（如实）**：T68M 存量 fnOS 机 `192.168.10.223` 当前离线、`.1` 跑的是 iNextOS（不同产品线），
+本轮验收止于「门禁负/正例 + 新旧 diff 等价」；实机转码复测待 `.223` 上线后按 K1 判据补
+（`journalctl -k -b | grep -c 'resetting\.\.\.'` = 0、相册连播流畅、`ffmpeg hevc_rkmpp` EXIT=0）。
+
 ## 变更记录
 
 | commit | 内容 |
 |--------|------|
+| （本次） | **fix**: 媒体层对齐官方 —— rkvdec/rkvenc 去 OPP 链接（官方 OPP 基线=7，多的正是这两个）；新增 `tools/verify-t68m-media-dts.sh` 媒体门禁并接入 build-dtb 与 fnOS 两个 workflow（含 uboot 拷贝防陈旧）；dist+uboot 两份预编译 DTB 现编同步（76555→76523 B） |
 | （本次） | **docs**: README 补充 NPU 启用流程（系统 ≥ 1.2.0604 + 安装 `trim.ai-runtime-rk3568`「飞牛AI引擎(RK356x)」+ 相册开启 AI 硬件加速；固件侧无需 NPU 特改） |
 | （本次） | **feat**: DTB 基底切换至飞牛 6.18 原生 NanoPi R5S 骨架（460 节点三方归属全对齐，仅 phandle 编号重排；剔除 R5S 板载 gpio-leds，保留 T68M leds/sdio-pwrseq/minipcie regulator） |
 | `5a2ceb9` | **fix**: NPU `iommu@fde4b000` compatible 恢复双值（对齐骨架，兼容主线+SDK 血统） |

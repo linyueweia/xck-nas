@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq xz-utils
+          sudo apt-get install -y jq xz-utils device-tree-compiler
 
       - name: Download Official FnOS Universal Base Image
         id: download
@@ -92,6 +92,12 @@ jobs:
           SCRIPT
           chmod +x /tmp/verify_dtb.sh
           bash /tmp/verify_dtb.sh
+
+      - name: Media DT gate (转码死机防回归 · 官方形态对照)
+        run: |
+          chmod +x tools/verify-t68m-media-dts.sh
+          # 镜像实际烧入的是 uboot/ 这份拷贝（buildfnos.sh 从 $UBOOT_PATH/*.dtb 写入 boot 分区）
+          bash tools/verify-t68m-media-dts.sh uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb
 
       - name: Upload build log (private)
         uses: actions/upload-artifact@v4
