@@ -77,7 +77,7 @@ has_group_u=0
 #   U-Boot 2025.10-OpenWrt-r33338-0465e2cf57 / ddr-v1.23-03ea844c5d
 #   boot_targets=mmc1 mmc0 nvme scsi usb …（mmc 优先）/ 含 fdt_fixup_memory
 #   取法：gzip -dc istoreos-rockchip-armv8-lyt_lyw-squashfs-sysupgrade.img.gz | head -c 32M
-# 弃用飞牛官方 2026.04-TRIM：本板实测该引导件跑不完全链路（H88K 上同样结论）。
+# 弃用飞牛官方 2026.04-TRIM：该引导件在 RK3568 板上跑不完全链路（实测 booti 后无输出）。
 UNIVERSAL_UBOOT="${UNIVERSAL_UBOOT:-uboot/lyw-istoreos-first32m.bin}"
 [[ -f "$UNIVERSAL_UBOOT" ]] && has_group_u=1
 
