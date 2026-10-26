@@ -48,13 +48,15 @@ jobs:
           curl -fL --retry 3 -o base/SHA256SUMS "https://github.com/$REPO/releases/download/${TAG}/SHA256SUMS"
           grep " ${ASSET}$" base/SHA256SUMS | (cd base && sha256sum -c -)
           echo "  ✓ gz 校验通过（$TAG）"
-          gunzip -c "base/$ASSET" > base/fnnas-base.img
+          RAW_NAME="fnnas-official-arm64-image_rockchip.img"
+          gunzip -c "base/$ASSET" > "base/$RAW_NAME"
           rm -f "base/$ASSET"
-          RAW_LINE="$(grep ' fnnas-official-arm64-image_rockchip.img$' base/SHA256SUMS || true)"
+          RAW_LINE="$(grep " ${RAW_NAME}$" base/SHA256SUMS || true)"
           if [[ -n "$RAW_LINE" ]]; then
             echo "$RAW_LINE" | (cd base && sha256sum -c -) || { echo "::error::raw 与 SHA256SUMS 不符"; exit 1; }
             echo "  ✓ raw 校验通过"
           fi
+          mv "base/$RAW_NAME" base/fnnas-base.img
           mkdir -p fnnas-arm64
           cp base/fnnas-base.img fnnas-arm64/fnnas-arm64.img
           echo "filename=$ASSET" >> "$GITHUB_OUTPUT"
