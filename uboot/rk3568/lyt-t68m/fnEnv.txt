@@ -3,4 +3,4 @@ bootlogo=false
 console=both
 extraargs=cma=1G
 fdtfile=rockchip/rk3568-lyt-t68m.dtb
-kernelfile=vmlinuz-6.18.18.c951-trim
+# kernelfile 由构建时按基镜像实际内核自动探测（勿写死：基镜像换内核会黑）

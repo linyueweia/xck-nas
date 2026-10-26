@@ -164,8 +164,81 @@ BOOT_PART="${LOOP_DEVICE}p1"
 [[ -e "$BOOT_PART" ]] || { echo "❌ boot 分区不存在"; exit 1; }
 
 sudo mount "$BOOT_PART" "$BOOT_MOUNT" || { echo "❌ 挂载 boot 分区失败"; exit 1; }
-echo "✏️ 替换 boot 分区 fnEnv.txt"
-sudo cp "$UBOOT_PATH/fnEnv.txt" "$BOOT_MOUNT/fnEnv.txt" || { echo "❌ 写入 fnEnv.txt 失败"; exit 1; }
+# ── fnEnv.txt：以【基镜像自带】为底稿，只覆盖必须改的键 ──────────────────────
+# 血的教训（2026-10-27）：原来把仓库里的静态 fnEnv 整份覆盖进 p1，里面写死
+#   kernelfile=vmlinuz-6.18.18.c951-trim，而基镜像 latest 已是 6.18.18.c1145-trim →
+#   boot.scr 按名找不到内核文件，固件刷进去必黑。
+# 正确做法（与官方 boot.cmd 的契约一致）：保留基镜像的 kernelfile/verbosity/console/
+#   earlycon/extraargs，只把 fdtfile 指到本板 DTB；kernelfile 若指向不存在的文件，
+#   自动改成本板 p1 里唯一的 vmlinuz-*（并断言它真实存在）。
+echo "✏️ 合并 fnEnv.txt（以基镜像为底稿，只改 fdtfile）"
+sudo cat "$BOOT_MOUNT/fnEnv.txt" > /tmp/base_fnEnv.txt 2>/dev/null || : > /tmp/base_fnEnv.txt
+grep -q . /tmp/base_fnEnv.txt || echo "ℹ️ 基镜像无 fnEnv.txt，改用仓库模板 + 自动探测内核"
+python3 - "$BOOT_MOUNT" "$UBOOT_PATH/fnEnv.txt" /tmp/base_fnEnv.txt /tmp/new_fnEnv.txt <<'PYF'
+import os, sys, glob
+boot, tpl_p, base_p, out_p = sys.argv[1:5]
+
+def parse(p):
+    d = {}
+    if os.path.exists(p):
+        for ln in open(p, encoding='utf-8', errors='replace'):
+            ln = ln.strip()
+            if not ln or ln.startswith('#') or '=' not in ln:
+                continue
+            k, v = ln.split('=', 1)
+            d[k.strip()] = v.strip()
+    return d
+
+base, tpl = parse(base_p), parse(tpl_p)
+# 底稿：基镜像优先；基镜像没有的键才用模板补
+env = dict(tpl); env.update(base)
+if not base:
+    env = dict(tpl)
+# extraargs 属于板级故意覆盖（如 cma 大小），模板给了就以模板为准
+if 'extraargs' in tpl and tpl['extraargs'] != base.get('extraargs'):
+    env['extraargs'] = tpl['extraargs']
+    print(f"  · extraargs 用板级模板覆盖: {tpl['extraargs']}（基镜像为 {base.get('extraargs') or '(无)'}）")
+
+# 本板 p1 里真实存在的内核文件
+kerns = sorted(os.path.basename(x) for x in glob.glob(os.path.join(boot, 'vmlinuz*')))
+ker = env.get('kernelfile', '')
+if ker and os.path.exists(os.path.join(boot, ker)):
+    pass                                   # 基镜像的 kernelfile 有效 → 原样保留
+elif kerns:
+    old_ker = ker
+    env['kernelfile'] = kerns[0]
+    print(f"  ⚠ kernelfile '{old_ker or '(未设置)'}' 在 p1 不存在 → 改为 {kerns[0]}")
+else:
+    sys.exit("❌ p1 里没有任何 vmlinuz* 内核文件，无法引导")
+
+# 只强制改 fdtfile（本板 DTB）
+fdt = tpl.get('fdtfile')
+if not fdt:
+    sys.exit("❌ 模板 fnEnv 没给 fdtfile")
+env['fdtfile'] = fdt
+
+order = ['verbosity', 'bootlogo', 'console', 'earlycon', 'extraargs', 'kernelfile', 'fdtfile', 'initrdfile']
+lines = [f"{k}={env[k]}" for k in order if k in env]
+lines += [f"{k}={v}" for k, v in env.items() if k not in order]
+open(out_p, 'w', encoding='utf-8').write("\n".join(lines) + "\n")
+print("  ── 合并结果 ──")
+for l in lines:
+    print("     " + l)
+ker = env['kernelfile']
+kp = os.path.join(boot, ker)
+if not os.path.exists(kp):
+    sys.exit(f"❌ 断言失败：kernelfile={ker} 在 p1 不存在")
+sz = os.path.getsize(kp)
+if sz < 5 * 1024 * 1024:
+    sys.exit(f"❌ 内核文件只有 {sz} B，不正常")
+with open(kp, 'rb') as f:
+    head = f.read(0x40)
+if b'ARMd' not in head and not head[:2] == b'\x1f\x8b':
+    sys.exit("❌ 内核文件既不是未压缩 arm64 Image(ARMd) 也不是 gzip，可疑")
+print(f"  ✅ kernelfile 存在且形态正常（{ker}, {sz:,} B）")
+PYF
+sudo cp /tmp/new_fnEnv.txt "$BOOT_MOUNT/fnEnv.txt" || { echo "❌ 写入 fnEnv.txt 失败"; exit 1; }
+[[ -f "$BOOT_MOUNT/boot.scr" ]] || echo "⚠️ p1 缺 boot.scr —— 官方引导脚本不在，bootflow 走不到 fnEnv"
 
 # 检查并处理 extlinux.conf
 EXTLINUX_CONF_PATH="$BOOT_MOUNT/extlinux/extlinux.conf"
