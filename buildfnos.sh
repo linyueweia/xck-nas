@@ -72,6 +72,11 @@ shopt -s nullglob
 
 has_group_a=0
 has_group_b=0
+has_group_u=0
+# 2026-10-26：优先使用【飞牛官方 RK3568 通用 U-Boot】（32MiB，含 RKNS idbloader + u-boot.itb，
+# U-Boot 2026.04-TRIM / ddr-v1.23-03ea844c5d），不再依赖板级 idbloader/u-boot.itb 分件。
+UNIVERSAL_UBOOT="${UNIVERSAL_UBOOT:-uboot/fnos-rk3568-first32m.bin}"
+[[ -f "$UNIVERSAL_UBOOT" ]] && has_group_u=1
 
 [[ -f "$UBOOT_PATH/idbloader.img" && -f "$UBOOT_PATH/u-boot.itb" ]] && has_group_a=1
 [[ -f "$UBOOT_PATH/idbloader.bin" && -f "$UBOOT_PATH/uboot.img" && -f "$UBOOT_PATH/trust.bin" ]] && has_group_b=1
@@ -80,7 +85,9 @@ BOOT_GROUP_RAW="${BOOT_GROUP:-auto}"
 BOOT_GROUP_UPPER=$(printf '%s' "$BOOT_GROUP_RAW" | tr '[:lower:]' '[:upper:]')
 
 if [[ "$BOOT_GROUP_UPPER" == "AUTO" ]]; then
-  if [[ $has_group_a -eq 1 && $has_group_b -eq 1 ]]; then
+  if [[ $has_group_u -eq 1 ]]; then
+    BOOT_GROUP_UPPER="U"
+  elif [[ $has_group_a -eq 1 && $has_group_b -eq 1 ]]; then
     echo "❌ 同时存在两种启动格式，请通过 BOOT_GROUP=A 或 BOOT_GROUP=B 指定"; exit 1
   elif [[ $has_group_a -eq 1 ]]; then
     BOOT_GROUP_UPPER="A"
@@ -93,8 +100,10 @@ elif [[ "$BOOT_GROUP_UPPER" == "A" ]]; then
   [[ $has_group_a -eq 1 ]] || { echo "❌ 已指定 BOOT_GROUP=A 但缺少 idbloader.img/u-boot.itb"; exit 1; }
 elif [[ "$BOOT_GROUP_UPPER" == "B" ]]; then
   [[ $has_group_b -eq 1 ]] || { echo "❌ 已指定 BOOT_GROUP=B 但缺少 idbloader.bin/uboot.img/trust.bin"; exit 1; }
+elif [[ "$BOOT_GROUP_UPPER" == "U" ]]; then
+  [[ $has_group_u -eq 1 ]] || { echo "❌ 已指定 BOOT_GROUP=U 但缺少 $UNIVERSAL_UBOOT"; exit 1; }
 else
-  echo "❌ BOOT_GROUP 仅支持 A/B/auto"; exit 1
+  echo "❌ BOOT_GROUP 仅支持 A/B/U/auto"; exit 1
 fi
 
 echo "✅ 设备文件齐全 (使用启动格式: $BOOT_GROUP_UPPER)"
@@ -102,7 +111,19 @@ echo "✅ 设备文件齐全 (使用启动格式: $BOOT_GROUP_UPPER)"
 echo
 echo "2️⃣ 注入 Rockchip Bootloader ($BOOT_GROUP_UPPER)"
 
-if [[ "$BOOT_GROUP_UPPER" == "A" ]]; then
+if [[ "$BOOT_GROUP_UPPER" == "U" ]]; then
+  [[ "$(stat -c%s "$UNIVERSAL_UBOOT")" -eq 33554432 ]] || { echo "❌ 通用 U-Boot 必须是 32MiB 提取件"; exit 1; }
+  sudo dd if="$UNIVERSAL_UBOOT" of="$MODIFIED_IMG" bs=512 skip=34 seek=34 conv=notrunc,fsync status=none || { echo "❌ 写入通用 U-Boot 失败"; exit 1; }
+  python3 - "$MODIFIED_IMG" <<'PYU'
+import sys
+d=open(sys.argv[1],'rb').read(32*1024*1024)
+assert d[0x8000:0x8004]==b'RKNS', "通用 U-Boot: idbloader 魔数缺失"
+assert d[0x800000:0x800004]==bytes.fromhex('d00dfeed'), "通用 U-Boot: FIT 魔数缺失"
+assert b'U-Boot 2026.04-TRIM' in d[:0x800010], "通用 U-Boot 版本串不对（应含 U-Boot 2026.04-TRIM）"
+assert b'boot_targets=usb mmc1 mmc0' in d[:0x800010], "通用 U-Boot 的 boot_targets 不含 mmc1(SD)"
+print("✅ 飞牛 RK3568 通用 U-Boot 注入断言通过（RKNS + FIT + 2026.04-TRIM + mmc1）")
+PYU
+elif [[ "$BOOT_GROUP_UPPER" == "A" ]]; then
   sudo dd if="$UBOOT_PATH/idbloader.img" of="$MODIFIED_IMG" bs=512 seek=64 conv=notrunc,fsync status=none || { echo "❌ 写入 idbloader.img 失败"; exit 1; }
   sudo dd if="$UBOOT_PATH/u-boot.itb"    of="$MODIFIED_IMG" bs=512 seek=16384 conv=notrunc,fsync status=none || { echo "❌ 写入 u-boot.itb 失败"; exit 1; }
 else
