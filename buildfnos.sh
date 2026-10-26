@@ -122,11 +122,13 @@ import sys
 d=open(sys.argv[1],'rb').read(32*1024*1024)
 assert d[0x8000:0x8004]==b'RKNS', "通用 U-Boot: idbloader 魔数缺失"
 assert d[0x800000:0x800004]==bytes.fromhex('d00dfeed'), "通用 U-Boot: FIT 魔数缺失"
-assert b'U-Boot 2025.10-OpenWrt' in d[:0x800010], "U-Boot 版本串不对（应含 U-Boot 2025.10-OpenWrt）"
-assert b'boot_targets=mmc1 mmc0' in d[:0x800010], "boot_targets 不是 mmc 优先"
-assert b'boot_targets=usb mmc1 mmc0' not in d[:0x800010], "boot_targets 仍是 usb 优先（插 USB 盘就抢引导）"
-assert b'ddr-v1.23' in d[:0x800010], "DDR 固件不是 v1.23（与本板 eMMC 原厂一致的版本）"
-assert b'fdt_fixup_memory' in d[:0x800010], "缺 fdt_fixup_memory（内存靠它注入）"
+# 注意：版本串与 boot_targets 都在 FIT 负载里（本件 0x89fb64 / 0x89e266），
+# 不能只看前 8MiB（0x800010）—— 那里只有 FIT 头。全量搜 32MiB 前缀。
+assert b'U-Boot 2025.10-OpenWrt' in d, "U-Boot 版本串不对（应含 U-Boot 2025.10-OpenWrt）"
+assert b'boot_targets=mmc1 mmc0' in d, "boot_targets 不是 mmc 优先"
+assert b'boot_targets=usb mmc1 mmc0' not in d, "boot_targets 仍是 usb 优先（插 USB 盘就抢引导）"
+assert b'ddr-v1.23' in d, "DDR 固件不是 v1.23（与本板 eMMC 原厂一致的版本）"
+assert b'fdt_fixup_memory' in d, "缺 fdt_fixup_memory（内存靠它注入）"
 print("✅ LYW iStoreOS U-Boot 注入断言通过（RKNS + FIT + 2025.10-OpenWrt + mmc 优先 + ddr-v1.23 + memory 注入）")
 PYU
 elif [[ "$BOOT_GROUP_UPPER" == "A" ]]; then
