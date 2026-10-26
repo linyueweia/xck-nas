@@ -73,9 +73,12 @@ shopt -s nullglob
 has_group_a=0
 has_group_b=0
 has_group_u=0
-# 2026-10-26：优先使用【飞牛官方 RK3568 通用 U-Boot】（32MiB，含 RKNS idbloader + u-boot.itb，
-# U-Boot 2026.04-TRIM / ddr-v1.23-03ea844c5d），不再依赖板级 idbloader/u-boot.itb 分件。
-UNIVERSAL_UBOOT="${UNIVERSAL_UBOOT:-uboot/fnos-rk3568-first32m.bin}"
+# 2026-10-27：改用【LYW 仓构建的 iStoreOS U-Boot】（32MiB，RKNS idbloader + u-boot.itb 一体）：
+#   U-Boot 2025.10-OpenWrt-r33338-0465e2cf57 / ddr-v1.23-03ea844c5d
+#   boot_targets=mmc1 mmc0 nvme scsi usb …（mmc 优先）/ 含 fdt_fixup_memory
+#   取法：gzip -dc istoreos-rockchip-armv8-lyt_lyw-squashfs-sysupgrade.img.gz | head -c 32M
+# 弃用飞牛官方 2026.04-TRIM：本板实测该引导件跑不完全链路（H88K 上同样结论）。
+UNIVERSAL_UBOOT="${UNIVERSAL_UBOOT:-uboot/lyw-istoreos-first32m.bin}"
 [[ -f "$UNIVERSAL_UBOOT" ]] && has_group_u=1
 
 [[ -f "$UBOOT_PATH/idbloader.img" && -f "$UBOOT_PATH/u-boot.itb" ]] && has_group_a=1
@@ -119,9 +122,12 @@ import sys
 d=open(sys.argv[1],'rb').read(32*1024*1024)
 assert d[0x8000:0x8004]==b'RKNS', "通用 U-Boot: idbloader 魔数缺失"
 assert d[0x800000:0x800004]==bytes.fromhex('d00dfeed'), "通用 U-Boot: FIT 魔数缺失"
-assert b'U-Boot 2026.04-TRIM' in d[:0x800010], "通用 U-Boot 版本串不对（应含 U-Boot 2026.04-TRIM）"
-assert b'boot_targets=usb mmc1 mmc0' in d[:0x800010], "通用 U-Boot 的 boot_targets 不含 mmc1(SD)"
-print("✅ 飞牛 RK3568 通用 U-Boot 注入断言通过（RKNS + FIT + 2026.04-TRIM + mmc1）")
+assert b'U-Boot 2025.10-OpenWrt' in d[:0x800010], "U-Boot 版本串不对（应含 U-Boot 2025.10-OpenWrt）"
+assert b'boot_targets=mmc1 mmc0' in d[:0x800010], "boot_targets 不是 mmc 优先"
+assert b'boot_targets=usb mmc1 mmc0' not in d[:0x800010], "boot_targets 仍是 usb 优先（插 USB 盘就抢引导）"
+assert b'ddr-v1.23' in d[:0x800010], "DDR 固件不是 v1.23（与本板 eMMC 原厂一致的版本）"
+assert b'fdt_fixup_memory' in d[:0x800010], "缺 fdt_fixup_memory（内存靠它注入）"
+print("✅ LYW iStoreOS U-Boot 注入断言通过（RKNS + FIT + 2025.10-OpenWrt + mmc 优先 + ddr-v1.23 + memory 注入）")
 PYU
 elif [[ "$BOOT_GROUP_UPPER" == "A" ]]; then
   sudo dd if="$UBOOT_PATH/idbloader.img" of="$MODIFIED_IMG" bs=512 seek=64 conv=notrunc,fsync status=none || { echo "❌ 写入 idbloader.img 失败"; exit 1; }
