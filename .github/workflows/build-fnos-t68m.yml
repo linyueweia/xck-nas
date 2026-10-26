@@ -2,6 +2,12 @@ name: Build FnOS T68M Image
 
 on:
   workflow_dispatch:
+    inputs:
+      base_image_tag:
+        description: "基镜像 release tag；latest=自适应最新正式版（推荐）"
+        required: false
+        default: "latest"
+        type: string
 
 permissions:
   contents: write
@@ -19,30 +25,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq xz-utils device-tree-compiler
 
-      - name: Download Official FnOS Universal Base Image
+      - name: Fetch latest fnOS universal base image (自适应)
         id: download
         run: |
           set -e
           REPO="linyueweia/fnnas-base-images"
-          TAG="v1.0.0"
-          API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
-          RESPONSE=$(curl -sL "$API_URL")
-          ASSET_URL=$(echo "$RESPONSE" | jq -r '
-            .assets[] | select(.name | endswith(".img.gz")) | .browser_download_url
-          ' | sort -V | tail -n 1)
-          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
-            echo "❌ No .img.gz asset found in linyueweia/fnnas-base-images"
-            exit 1
+          TAG="${{ inputs.base_image_tag || 'latest' }}"
+          ASSET="fnnas-official-arm64-image_rockchip.img.gz"
+          if [[ "$TAG" == "latest" ]]; then
+            # 自适应：取最新正式基镜像 release（排除 src-* 源档 / draft / prerelease）
+            TAG="$(curl -sf https://api.github.com/repos/$REPO/releases \
+              | jq -r '[.[] | select((.draft|not) and (.prerelease|not) and ((.tag_name|startswith("src-"))|not))][0].tag_name')"
+            [[ -n "$TAG" && "$TAG" != "null" ]] || { echo "::error::拿不到 $REPO 的最新基镜像 tag"; exit 1; }
           fi
-          FILENAME=$(basename "$ASSET_URL")
-          echo "Downloading: $FILENAME"
-          curl -L -o "$FILENAME" "$ASSET_URL"
-          echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
-
-      - name: Decompress base image
-        run: |
+          echo "基镜像 tag = $TAG"
+          mkdir -p base
+          URL="https://github.com/$REPO/releases/download/${TAG}/${ASSET}"
+          echo "  下载: $URL"
+          curl -fL --retry 3 -o "base/$ASSET" "$URL"
+          gzip -t "base/$ASSET"
+          # 完整性双校验：release 随附 SHA256SUMS（gz + 解压后 raw 各一道）
+          curl -fL --retry 3 -o base/SHA256SUMS "https://github.com/$REPO/releases/download/${TAG}/SHA256SUMS"
+          grep " ${ASSET}$" base/SHA256SUMS | (cd base && sha256sum -c -)
+          echo "  ✓ gz 校验通过（$TAG）"
+          gunzip -c "base/$ASSET" > base/fnnas-base.img
+          rm -f "base/$ASSET"
+          RAW_LINE="$(grep ' fnnas-official-arm64-image_rockchip.img$' base/SHA256SUMS || true)"
+          if [[ -n "$RAW_LINE" ]]; then
+            echo "$RAW_LINE" | (cd base && sha256sum -c -) || { echo "::error::raw 与 SHA256SUMS 不符"; exit 1; }
+            echo "  ✓ raw 校验通过"
+          fi
           mkdir -p fnnas-arm64
-          gunzip -c "${{ steps.download.outputs.filename }}" > fnnas-arm64/fnnas-arm64.img
+          cp base/fnnas-base.img fnnas-arm64/fnnas-arm64.img
+          echo "filename=$ASSET" >> "$GITHUB_OUTPUT"
+          sudo parted -s fnnas-arm64/fnnas-arm64.img unit s print || true
 
       - name: Build T68M image
         id: build
@@ -62,11 +78,10 @@ jobs:
           #!/bin/bash
           set -e
           IMG=$(find out -name "*.img" | head -n1)
-          BOOT_IMG="/tmp/bootpart.img"
-          # boot partition at LBA 65536 = 32MiB offset, size 360MiB (img 分区1)
-          dd if="$IMG" of="$BOOT_IMG" bs=1M skip=32 count=360 2>/dev/null
+          # v1.1.0 起 boot 分区尺寸可变（380MiB），改用 losetup -P 直接挂 p1（自适应）
+          LOOP=$(sudo losetup -fP --show "$IMG")
           mkdir -p /tmp/bm
-          sudo mount -o loop,ro "$BOOT_IMG" /tmp/bm || { sudo mount -o loop "$BOOT_IMG" /tmp/bm; }
+          sudo mount "${LOOP}p1" /tmp/bm
           SRC_SHA=$(sha256sum uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb | awk '{print $1}')
           ING_SHA=$(sha256sum /tmp/bm/dtb/rockchip/rk3568-lyt-t68m.dtb | awk '{print $1}')
           echo "=== source dtb: $SRC_SHA"
@@ -79,6 +94,7 @@ jobs:
           else
             echo "❌ fnEnv 缺 cma=1G（相册AI整机挂死的根因，禁止回退）"
             sudo umount /tmp/bm 2>/dev/null || true
+          sudo losetup -d "$LOOP" 2>/dev/null || true
             exit 1
           fi
           if [ "$SRC_SHA" = "$ING_SHA" ]; then
