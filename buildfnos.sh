@@ -308,6 +308,14 @@ sudo umount "$ROOT_MOUNT" || { echo "❌ 卸载 root 分区失败"; exit 1; }
 cleanup
 echo "✅ 分区处理完成"
 
+# 4️⃣ GPT 自洽（R5S 官方镜像同款口径，2026-10-27 T68M 起不来根因修复）
+#   烧录工具/基镜像可能改 alt/last_usable/MBR count 却漏算头 CRC（或分区项指针错位）：
+#   U-Boot 宽容照常引导，Linux 内核严格校验拒绝整表 → mmcblk 只认到卡无分区 →
+#   卡死 "Waiting for root device"（无 panic 无报错，干等）。
+#   gpt-fix.py：诊断=CI 断言（有问题 exit 1）；--apply=按 UEFI 规范重算全部字段后复检。
+echo "5️⃣ GPT 自洽（全字段校验 + 修复 + 复检）"
+python3 tools/gpt-fix.py "$MODIFIED_IMG" --apply || { echo "❌ GPT 修复/复检失败"; exit 1; }
+
 echo
 echo "========================================"
 echo "🎉 处理完成"
