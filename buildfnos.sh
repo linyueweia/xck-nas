@@ -299,6 +299,51 @@ sudo ln -sf ../lyt-t68m-watchdog.service \
   || { echo "❌ 自检：单元未启用（wants 缺链）"; exit 1; }
 echo "✅ 已注入硬件看门狗保命件（lyt-t68m-watchdog.service，开机自启）"
 
+# OS 层修复：mask 本板没有对应硬件的服务（判据与 lyw-hk / lyw-kf 同款，含 SysV 形态）
+#   exim4        只有 /etc/init.d/exim4（SysV，无 unit 文件）→「只查 *.service 文件」的写法永不命中，
+#                开机时 systemd-sysv-generator 才临时生成 exim4.service，启动即 failed
+#                （日志：either install a certificate or change tls_advertise_hosts option）
+#   nut-server   Network UPS Tools 设备信息服务，本板无 UPS → failed
+#   nut-monitor  同族（无 UPS），一并关掉，否则迟早也 failed
+# ⚠ 故意【不动】的三者（动了就是真故障）：
+#   pwm-fancontrol  风扇服务，board.json 的 fan 段是它的配置源
+#   smartmontools   本板有 SATA/NVMe，SMART 可读，属正常使用
+#   networking      fnOS 仍有依赖，mask 有断网风险
+T68M_MASK="nut-monitor nut-server exim4"
+for u in $T68M_MASK; do
+  hit=0
+  for d in "$ROOT_MOUNT/etc/systemd/system" "$ROOT_MOUNT/usr/lib/systemd/system" "$ROOT_MOUNT/lib/systemd/system"; do
+    [[ -f "$d/$u.service" && ! -L "$d/$u.service" ]] && hit=1
+  done
+  [[ -f "$ROOT_MOUNT/etc/init.d/$u" ]] && hit=1      # SysV 也算命中
+  if [[ "$hit" = 1 ]]; then
+    sudo ln -sf /dev/null "$ROOT_MOUNT/etc/systemd/system/$u.service" \
+      || { echo "❌ mask $u.service 失败"; exit 1; }
+    echo "  ✓ mask $u.service"
+  else
+    echo "  · $u 不在镜像里（跳过）"
+  fi
+done
+# 自证①：镜像里存在的必须真 masked（unit 或 SysV 任一形态）
+for u in $T68M_MASK; do
+  if [[ -e "$ROOT_MOUNT/etc/systemd/system/$u.service" || -e "$ROOT_MOUNT/usr/lib/systemd/system/$u.service" \
+        || -e "$ROOT_MOUNT/lib/systemd/system/$u.service" || -f "$ROOT_MOUNT/etc/init.d/$u" ]]; then
+    if [[ -L "$ROOT_MOUNT/etc/systemd/system/$u.service" ]] \
+       && [[ "$(readlink "$ROOT_MOUNT/etc/systemd/system/$u.service")" == "/dev/null" ]]; then
+      echo "  ✓ 自证 $u -> /dev/null"
+    else
+      echo "❌ 自检：$u 存在于镜像但未真正 masked（systemd unit 或 /etc/init.d 脚本）"
+      exit 1
+    fi
+  fi
+done
+# 自证②：风扇服务绝不能被 mask（防「顺手把 pwm-fancontrol 也关掉」的回归）
+if [[ -L "$ROOT_MOUNT/etc/systemd/system/pwm-fancontrol.service" ]]; then
+  echo "❌ pwm-fancontrol 被 mask 了 —— 风扇会彻底失效"
+  exit 1
+fi
+echo "✅ 已 mask 无硬件服务（nut-monitor / nut-server / exim4）；pwm-fancontrol 保持可用"
+
 # 读取 fnOS 版本号仅作日志信息（产物命名已定案为固定 IMG_NAME，不再拼版本/构建号）
 FNOS_VERSION=$(sed -n 's/^VERSION_ID="\?\([^"]*\)"\?/\1/p' "$ROOT_MOUNT/etc/os-release" 2>/dev/null | head -n1)
 [[ -n "$FNOS_VERSION" ]] || { echo "⚠️ 无法从 rootfs 读取 VERSION_ID，跳过版本号"; }
