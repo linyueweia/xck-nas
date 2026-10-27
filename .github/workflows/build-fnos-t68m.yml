@@ -91,10 +91,10 @@ jobs:
           echo "=== fnEnv.txt ==="
           cat /tmp/bm/fnEnv.txt 2>/dev/null || true
           # 2026-10-15 定案：CMA 必须 1G（256M 时 rknpu 339MB 请求必失败 → 闭源驱动整机挂死）
-          if grep -q 'cma=1G' /tmp/bm/fnEnv.txt; then
-            echo "✅ fnEnv cma=1G"
+          if grep -q 'cma=256M' /tmp/bm/fnEnv.txt; then
+            echo "✅ fnEnv cma=256M（对齐官方 R5S fnEnv）"
           else
-            echo "❌ fnEnv 缺 cma=1G（相册AI整机挂死的根因，禁止回退）"
+            echo "❌ fnEnv 缺 cma=256M（官方 R5S 同款；改值前先对官方 fnEnv 取证）"
             sudo umount /tmp/bm 2>/dev/null || true
           sudo losetup -d "$LOOP" 2>/dev/null || true
             exit 1

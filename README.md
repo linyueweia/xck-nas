@@ -150,7 +150,7 @@ uboot/rk3568/lyt-t68m/            # T68M 设备目录（u-boot/fnEnv/extlinux/dt
 |------|------|
 | `idbloader.img` | first-stage bootloader（RK3568 通用，182KB） |
 | `u-boot.itb` | FIT 格式 u-boot（RK3568 通用，1.1MB） |
-| `fnEnv.txt` | 引导变量：`fdtfile=rockchip/rk3568-lyt-t68m.dtb` + `cma=1G` |
+| `fnEnv.txt` | 引导变量：`fdtfile=rockchip/rk3568-lyt-t68m.dtb` + `cma=256M`（对齐官方 R5S） |
 | `extlinux.conf` | 系统引导配置（earlycon @ fe660000，console=ttyS2,1500000） |
 | `rk3568-lyt-t68m.dtb` | 最终设备树（4f785bc7，与 dist/ 一致，76481B） |
 
