@@ -117,6 +117,10 @@ jobs:
           # 镜像实际烧入的是 uboot/ 这份拷贝（buildfnos.sh 从 $UBOOT_PATH/*.dtb 写入 boot 分区）
           bash tools/verify-t68m-media-dts.sh uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb
 
+      - name: R5S 字节级对标门禁（媒体簇 26 节点 vs 官方参照件，2026-10-27）
+        run: |
+          python3 tools/r5s-media-parity.py uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb dist/rk3568-nanopi-r5s-official.dtb
+
       - name: Upload build log (private)
         uses: actions/upload-artifact@v4
         with:

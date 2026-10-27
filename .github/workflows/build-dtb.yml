@@ -74,10 +74,17 @@ jobs:
           dtc -I dtb -O dts rk3568-lyt-t68m.dtb -o /tmp/check2.dts
           # NPU IOMMU 必须含 rockchip,rk3568-iommu（飞牛 6.18 内核 iommu 驱动唯一匹配项；安卓原厂的 iommu-v2 在飞牛内核无驱动匹配会导致 probe -22）
           awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "rockchip,rk3568-iommu" && echo "OK: iommu compatible(rk3568-iommu)" || { echo "!! iommu compatible 缺 rk3568-iommu"; exit 1; }
-          # power-controller 必须含 power-domain@6 且挂 npu-supply（ODROID-M1/飞牛论坛实证：6.18 内核 + rknpu 0.9.8 可用方案保留 PD6+npu-supply；删 @6 会导致 rknpu probe 崩溃）
-          awk '/power-controller \{/,/power-domain@7/' /tmp/check2.dts | grep -q "power-domain@6" && echo "OK: 含 power-domain@6" || { echo "!! 缺 power-domain@6"; exit 1; }
-          awk '/power-controller \{/,/power-domain@7/' /tmp/check2.dts | grep -q "npu-supply" && echo "OK: power-controller npu-supply" || { echo "!! 缺 npu-supply"; exit 1; }
-          awk '/power-domain@6/,/};/' /tmp/check2.dts | grep -q "pm_qos" && echo "OK: pd6 pm_qos" || { echo "!! pd6 缺 pm_qos"; exit 1; }
+          # power-controller 必须含 power-domain@6（官方 R5S 即如此，pd6 = NPU 电源域，
+          # npu@fde40000 与 iommu@fde4b000 都靠 power-domains=<0x14 0x06> 挂它；@6 需带 pm_qos）。
+          # 注：pd6 里的 npu-supply 属性是 T68M 旧 DTS 自加的死配置（官方 R5S 无、驱动不读），
+          # 2026-10-27 已按官方删除；NPU 供电走 rknpu 节点自身的 rknpu-supply=<0xe9>（官方同款），勿再加回。
+          grep -q "power-domain@6" /tmp/check2.dts && echo "OK: 含 power-domain@6" || { echo "!! 缺 power-domain@6"; exit 1; }
+          awk '/power-domain@6/,/^\t\t\t\};/' /tmp/check2.dts | grep -q "pm_qos" && echo "OK: pd6 pm_qos" || { echo "!! pd6 缺 pm_qos"; exit 1; }
+          # 反断言：不得出现裸 npu-supply 属性（精确匹配行首，勿误伤合法的 rknpu-supply）
+          if grep -qE "^[[:space:]]*npu-supply =" /tmp/check2.dts; then echo "!! power-controller 出现裸 npu-supply（官方 R5S 无此死配置，应删除）"; exit 1; fi
+          echo "OK: 无裸 npu-supply（对齐官方 R5S；rknpu-supply 为合法保留）"
+          # rknpu 节点必须保留 rknpu-supply（NPU 供电真来源，官方同款）
+          awk '/npu@fde40000/,/^\t};/' /tmp/check2.dts | grep -q "rknpu-supply" && echo "OK: rknpu rknpu-supply" || { echo "!! npu 缺 rknpu-supply"; exit 1; }
           # npu/iommu 必须引用 power-domains=<&power 6>（genpd 链完整，rknpu probe 不崩）
           awk '/npu@fde40000/,/};/' /tmp/check2.dts | grep -q "power-domains" && echo "OK: npu power-domains" || { echo "!! npu 缺 power-domains"; exit 1; }
           awk '/iommu@fde4b000/,/};/' /tmp/check2.dts | grep -q "power-domains" && echo "OK: iommu power-domains" || { echo "!! iommu 缺 power-domains"; exit 1; }
@@ -104,6 +111,11 @@ jobs:
           bash tools/verify-t68m-media-dts.sh dist/rk3568-lyt-t68m.dtb
           echo "===== 仓内 uboot 拷贝（镜像实际使用，防陈旧） ====="
           bash tools/verify-t68m-media-dts.sh uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb
+
+      - name: R5S 字节级对标门禁（媒体簇 26 节点 vs 官方参照件，2026-10-27）
+        run: |
+          python3 tools/r5s-media-parity.py rk3568-lyt-t68m.dtb dist/rk3568-nanopi-r5s-official.dtb
+          python3 tools/r5s-media-parity.py uboot/rk3568/lyt-t68m/rk3568-lyt-t68m.dtb dist/rk3568-nanopi-r5s-official.dtb
 
       - name: 生成并输出校验文件
         run: |
