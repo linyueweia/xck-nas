@@ -1,6 +1,12 @@
 name: Build FnOS T68M Image
 
 on:
+  push:
+    paths:
+      - 'buildfnos.sh'
+      - 'assets/**'
+      - 'tools/**'
+      - '.github/workflows/build-fnos-t68m.yml'
   workflow_dispatch:
     inputs:
       base_image_tag:
